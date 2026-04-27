@@ -12,161 +12,153 @@
     html, body { width: 1270px; height: 760px; overflow: hidden; }
 
     /* -----------------------------------------------------------------------
-       Slide-scoped conic sweep: shares slide 06's red → mauve → sapphire → teal
-       palette, but with cool stops occupying a wider arc so blues dominate the
-       canvas. Center-anchored with a softer vignette so the sweep bleeds
-       around and behind the architecture diagram. (Matches slide 02/04.)
+       Slide-scoped conic sweep — same cool palette, but dimmed slightly so
+       the sketch card pops off it. The card carries the visual weight now;
+       the gradient just frames it.
     ----------------------------------------------------------------------- */
     .conic-sweep--cool-tr-quad {
       --conic-from: 180deg;
       --conic-at: 50% 50%;
-      --conic-vignette-size: 62% 60%;
-      --conic-vignette-at: 50% 55%;
-      --conic-vignette-strength: 0.50;
-      --conic-opacity: 0.85;
-      --conic-saturate: 1.20;
+      --conic-vignette-size: 64% 60%;
+      --conic-vignette-at: 50% 56%;
+      --conic-vignette-strength: 0.55;
+      --conic-opacity: 0.82;
+      --conic-saturate: 1.18;
     }
 
-    /* Override the conic stop list to bias the cool side: warm-red and peach
-       compress into a narrow lower wedge while blue → sapphire → teal claim
-       the majority of the rotation. Same hues as slide 06, redistributed. */
     .conic-sweep--cool-tr-quad::before {
       background: conic-gradient(
         from var(--conic-from) at var(--conic-at),
-        oklch(58% 0.22 15)    0deg,    /* warm red */
-        oklch(70% 0.18 45)   30deg,    /* peach (narrow) */
-        oklch(62% 0.16 320)  85deg,    /* mauve */
-        oklch(60% 0.20 240) 165deg,    /* blue (expanded) */
-        oklch(64% 0.18 215) 240deg,    /* sapphire */
-        oklch(68% 0.14 195) 315deg,    /* teal */
+        oklch(58% 0.22 15)    0deg,
+        oklch(70% 0.18 45)   30deg,
+        oklch(62% 0.16 320)  85deg,
+        oklch(60% 0.20 240) 165deg,
+        oklch(64% 0.18 215) 240deg,
+        oklch(68% 0.14 195) 315deg,
         oklch(58% 0.22 15)  360deg
       );
     }
 
     /* -----------------------------------------------------------------------
-       Architecture pane chrome — dark TUI nested panes
+       Sketch card — the Excalidraw "page". A deep cool-tinted near-black
+       surface that anchors the diagram. Subtle inner border + drop shadow
+       lifts it off the conic sweep without going full terminal chrome.
     ----------------------------------------------------------------------- */
 
-    /* Outer "your repo" pane */
-    .arch-pane--repo {
-      background: var(--mocha-crust);
-      border: 1px solid var(--mocha-overlay0);
-      border-radius: 10px;
+    .sketch-card {
+      flex: 1;
+      position: relative;
+      border-radius: 18px;
+      padding: 26px 32px 22px;
+      background:
+        radial-gradient(120% 100% at 50% 0%,
+          oklch(18% 0.03 250 / 0.55) 0%,
+          oklch(11% 0.025 250 / 0.92) 60%,
+          oklch(9% 0.02 250 / 0.95) 100%);
+      border: 1px solid oklch(40% 0.04 250 / 0.45);
       box-shadow:
-        0 12px 40px oklch(10% 0.04 240 / 0.55),
-        0 2px 8px  oklch(10% 0.04 240 / 0.35);
-    }
-
-    /* Middle "Atomic TypeScript workflow" pane — cool-blue tinted */
-    .arch-pane--atomic {
-      background: oklch(20% 0.04 240 / 0.55);
-      border: 1px solid color-mix(in oklch, var(--cool-blue) 45%, transparent);
-      border-radius: 8px;
-    }
-
-    /* Inner agent leaf panes */
-    .arch-pane--agent {
-      background: oklch(15% 0.02 240 / 0.85);
-      border-radius: 7px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .arch-pane--claude   { border: 1px solid color-mix(in oklch, var(--cool-sapphire) 45%, transparent); }
-    .arch-pane--opencode { border: 1px solid color-mix(in oklch, var(--warm-peach)    45%, transparent); }
-    .arch-pane--copilot  { border: 1px solid color-mix(in oklch, var(--cool-teal)     45%, transparent); }
-
-    /* Title bar — clean label, no traffic lights, accent-tinted underline */
-    .arch-titlebar {
+        0 24px 60px oklch(8% 0.03 250 / 0.55),
+        0 4px 14px  oklch(8% 0.03 250 / 0.40),
+        inset 0 1px 0 oklch(80% 0.02 250 / 0.06);
       display: flex;
       align-items: center;
-      padding: 7px 14px;
-      border-bottom: 1px solid currentColor;
-      border-color: inherit;
-      opacity: 0.95;
+      justify-content: center;
+      overflow: hidden;
     }
 
-    .arch-titlebar__label {
-      font-family: var(--font-mono);
-      font-size: 12px;
+    .sketch-card svg {
+      width: 100%;
+      height: auto;
+      max-height: 100%;
+      display: block;
+    }
+
+    /* Stroke styles — confident, hand-drawn weight */
+    .sk-stroke {
+      fill: none;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .sk-stroke--configs  { stroke: var(--mocha-subtext0); }
+    .sk-stroke--workflow { stroke: var(--cool-blue); }
+    .sk-stroke--steps    { stroke: color-mix(in oklch, var(--cool-blue) 60%, transparent); stroke-dasharray: 6 6; stroke-width: 1.5; }
+    .sk-stroke--agent    { stroke: var(--warm-peach); }
+    .sk-stroke--output   { stroke: var(--cool-teal); }
+    .sk-stroke--arrow    { stroke: var(--mocha-text); stroke-width: 2.2; }
+
+    /* Box fills — each box gets its accent at low opacity so the container
+       reads as a real surface, not just an outline. */
+    .sk-fill--configs  { fill: oklch(22% 0.02 250 / 0.55); }
+    .sk-fill--workflow { fill: color-mix(in oklch, var(--cool-blue) 14%, oklch(15% 0.03 250 / 0.65)); }
+    .sk-fill--steps    { fill: oklch(12% 0.03 250 / 0.55); }
+    .sk-fill--agent    { fill: color-mix(in oklch, var(--warm-peach) 12%, oklch(15% 0.04 30 / 0.55)); }
+    .sk-fill--output   { fill: color-mix(in oklch, var(--cool-teal) 12%, oklch(14% 0.03 200 / 0.6)); }
+
+    /* Text styles */
+    .sk-text { font-family: var(--font-mono); }
+
+    .sk-text--title {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .sk-text--body {
+      font-size: 15px;
       font-weight: 600;
-      letter-spacing: 0.04em;
-      white-space: nowrap;
+      letter-spacing: 0.005em;
     }
 
-    .arch-titlebar__line {
-      flex: 1;
-      height: 1px;
-      background: currentColor;
-      opacity: 0.22;
-      margin: 0 10px;
+    .sk-text--hint {
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
     }
 
-    .arch-titlebar__close {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      opacity: 0.45;
-      letter-spacing: 0.06em;
-    }
-
-    /* Pane bodies */
-    .arch-body {
-      padding: 14px 20px 12px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      line-height: 1.6;
-      white-space: pre;
-      color: var(--mocha-subtext1);
-    }
-
-    .arch-body--sm { font-size: 12px; }
-
-    .arch-agent-body {
-      padding: 12px 14px;
+    .sk-text--edge {
       font-family: var(--font-mono);
       font-size: 12px;
-      line-height: 1.55;
-      flex: 1;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
     }
 
-    /* Bottom ribbon */
-    .arch-ribbon {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      letter-spacing: 0.05em;
-      color: var(--text-on-gradient);
+    .sk-text--step-num {
+      font-size: 15px;
+      font-weight: 800;
     }
 
-    .arch-ribbon__tag  { white-space: nowrap; }
-    .arch-ribbon__dot  { margin: 0 8px; opacity: 0.45; color: var(--mocha-overlay0); }
+    /* Edge label backing pills — tiny rect behind each label so it
+       interrupts the arrow cleanly */
+    .sk-edge-pill { fill: oklch(11% 0.025 250 / 0.95); stroke: oklch(45% 0.04 250 / 0.5); stroke-width: 1; }
+
+    .sk-dots { fill: var(--cool-blue); }
   </style>
 </head>
 <body>
-  <!-- Dark slide -->
   <div class="slide">
 
-    <!-- Conic sweep — full-bleed, cool palette anchored to the top-right
-         corner; vignette fades into mocha base over the diagram. -->
+    <!-- Backdrop -->
     <div class="conic-sweep conic-sweep--cool-tr conic-sweep--cool-tr-quad"></div>
 
     <!-- Film grain -->
     <div class="film-grain"></div>
 
-    <!-- Content layer -->
-    <div class="slide__content" style="padding: 48px 60px 44px; display: flex; flex-direction: column;">
+    <!-- Content -->
+    <div class="slide__content" style="padding: 44px 56px 40px; display: flex; flex-direction: column;">
 
       <!-- Wordmark -->
-      <div class="wordmark" style="margin-bottom: 28px;">ATOMIC</div>
+      <div class="wordmark" style="margin-bottom: 24px;">ATOMIC</div>
 
       <!-- Headline -->
       <h1 style="
         font-family: var(--font-display);
         font-weight: 700;
-        font-size: 54px;
+        font-size: 52px;
         line-height: 1.04;
         letter-spacing: -0.025em;
         color: var(--mocha-text);
@@ -181,122 +173,173 @@
       <!-- Subhead -->
       <p style="
         font-family: var(--font-body);
-        font-size: 19px;
+        font-size: 18px;
         color: var(--text-on-gradient);
         line-height: 1.45;
-        margin-bottom: 32px;
-        max-width: 720px;
-      ">It wraps the tools developers already use with TypeScript workflow structure.</p>
+        margin-bottom: 22px;
+        max-width: 760px;
+      ">A workflow file in your repo, four boxes, three arrows. That's the whole picture.</p>
 
       <!-- ================================================================
-           Architecture diagram — terminal cartography (panes within panes)
+           Excalidraw-style flow on a dark sketch canvas
            ================================================================ -->
+      <div class="sketch-card">
+        <svg viewBox="0 0 1150 440" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <defs>
+            <!-- Hand-drawn wobble for box outlines and dividers -->
+            <filter id="rough" x="-2%" y="-2%" width="104%" height="104%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="2" seed="11" result="t"/>
+              <feDisplacementMap in="SourceGraphic" in2="t" scale="2.2"/>
+            </filter>
 
-      <!-- Outer "your repo" pane -->
-      <div class="arch-pane--repo" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <!-- Tighter wobble for arrows -->
+            <filter id="rough-arrow" x="-10%" y="-40%" width="120%" height="180%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="3" result="t"/>
+              <feDisplacementMap in="SourceGraphic" in2="t" scale="1.5"/>
+            </filter>
 
-        <!-- Title bar: "your repo" -->
-        <div class="arch-titlebar" style="color: var(--mocha-subtext0); border-bottom-color: var(--mocha-overlay0);">
-          <span class="arch-titlebar__label">your repo</span>
-          <span class="arch-titlebar__line"></span>
-          <span class="arch-titlebar__close">──────────────</span>
-        </div>
+            <!-- Hand-drawn arrowhead -->
+            <marker id="arrow-head" viewBox="0 0 12 12" refX="10" refY="6"
+                    markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+              <path d="M1.2 1.5 L10.5 6 L1 10.4" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </marker>
+          </defs>
 
-        <!-- Inner content of "your repo" -->
-        <div style="flex: 1; padding: 20px 24px 16px; display: flex; flex-direction: column;">
+          <!-- ==========================================================
+               BOX FILLS — drawn first, beneath strokes, also wobbled
+               so the fill follows the sketchy outline. No stroke here.
+               ========================================================== -->
+          <g filter="url(#rough)">
+            <rect class="sk-fill--configs"  x="10"   y="40" width="200" height="360" rx="14"/>
+            <rect class="sk-fill--workflow" x="290"  y="10" width="400" height="420" rx="16"/>
+            <rect class="sk-fill--steps"    x="312"  y="92" width="356" height="328" rx="10"/>
+            <rect class="sk-fill--agent"    x="770"  y="40" width="180" height="360" rx="14"/>
+            <rect class="sk-fill--output"   x="1020" y="40" width="130" height="360" rx="14"/>
+          </g>
 
-          <!-- Middle "Atomic TypeScript workflow" pane -->
-          <div class="arch-pane--atomic" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          <!-- ==========================================================
+               BOX STROKES — sketchy outlines + title dividers
+               ========================================================== -->
 
-            <!-- Title bar -->
-            <div class="arch-titlebar" style="color: var(--cool-blue); border-bottom-color: color-mix(in oklch, var(--cool-blue) 45%, transparent);">
-              <span class="arch-titlebar__label">Atomic TypeScript workflow</span>
-              <span class="arch-titlebar__line" style="background: var(--cool-blue);"></span>
-              <span class="arch-titlebar__close">──────────</span>
-            </div>
+          <g class="sk-stroke sk-stroke--configs" filter="url(#rough)">
+            <rect x="10" y="40" width="200" height="360" rx="14"/>
+            <line x1="10" y1="84" x2="210" y2="84"/>
+          </g>
 
-            <!-- Workflow body: defineWorkflow call signature -->
-            <div class="arch-body arch-body--sm" style="padding: 14px 20px 10px;"
-><span style="color: var(--cool-blue);">defineWorkflow</span><span style="color: var(--mocha-overlay1);">()</span><span style="color: var(--mocha-overlay0);">.</span><span style="color: var(--cool-teal);">run</span><span style="color: var(--mocha-overlay1);">(</span><span style="color: var(--mocha-mauve);">Promise.all</span><span style="color: var(--mocha-overlay1);">)</span><span style="color: var(--mocha-overlay0);">.</span><span style="color: var(--mocha-subtext1);">compile</span><span style="color: var(--mocha-overlay1);">()</span></div>
+          <g class="sk-stroke sk-stroke--workflow" filter="url(#rough)">
+            <rect x="290" y="10" width="400" height="420" rx="16"/>
+            <line x1="290" y1="54" x2="690" y2="54"/>
+          </g>
+          <g class="sk-stroke sk-stroke--steps" filter="url(#rough)">
+            <rect x="312" y="92" width="356" height="328" rx="10"/>
+          </g>
 
-            <!-- Three agent leaf panes side-by-side -->
-            <div style="
-              display: flex;
-              gap: 14px;
-              padding: 0 16px 16px;
-              flex: 1;
-              align-items: stretch;
-            ">
+          <g class="sk-stroke sk-stroke--agent" filter="url(#rough)">
+            <rect x="770" y="40" width="180" height="360" rx="14"/>
+            <line x1="770" y1="84" x2="950" y2="84"/>
+          </g>
 
-              <!-- Claude Code — cool-sapphire -->
-              <div class="arch-pane--agent arch-pane--claude">
-                <div class="arch-titlebar" style="color: var(--cool-sapphire); border-bottom-color: color-mix(in oklch, var(--cool-sapphire) 45%, transparent);">
-                  <span class="arch-titlebar__label">Claude Code</span>
-                  <span class="arch-titlebar__line" style="background: var(--cool-sapphire);"></span>
-                </div>
-                <div class="arch-agent-body">
-                  <div style="color: var(--cool-sapphire); font-size: 11px; margin-bottom: 4px;">native CLI + SDK</div>
-                  <div style="color: var(--mocha-subtext0); font-size: 11px;">session</div>
-                </div>
-              </div>
+          <g class="sk-stroke sk-stroke--output" filter="url(#rough)">
+            <rect x="1020" y="40" width="130" height="360" rx="14"/>
+            <line x1="1020" y1="84" x2="1150" y2="84"/>
+          </g>
 
-              <!-- OpenCode — warm-peach -->
-              <div class="arch-pane--agent arch-pane--opencode">
-                <div class="arch-titlebar" style="color: var(--warm-peach); border-bottom-color: color-mix(in oklch, var(--warm-peach) 45%, transparent);">
-                  <span class="arch-titlebar__label">OpenCode</span>
-                  <span class="arch-titlebar__line" style="background: var(--warm-peach);"></span>
-                </div>
-                <div class="arch-agent-body">
-                  <div style="color: var(--warm-peach); font-size: 11px; margin-bottom: 4px;">native CLI + SDK</div>
-                  <div style="color: var(--mocha-subtext0); font-size: 11px;">session</div>
-                </div>
-              </div>
+          <!-- Arrows -->
+          <g class="sk-stroke sk-stroke--arrow" filter="url(#rough-arrow)" style="color: var(--mocha-text);">
+            <path d="M214 220 C 240 220, 260 220, 286 220" marker-end="url(#arrow-head)"/>
+            <path d="M694 220 C 720 220, 740 220, 766 220" marker-end="url(#arrow-head)"/>
+            <path d="M954 220 C 980 220, 1000 220, 1016 220" marker-end="url(#arrow-head)"/>
+          </g>
 
-              <!-- Copilot CLI — cool-teal -->
-              <div class="arch-pane--agent arch-pane--copilot">
-                <div class="arch-titlebar" style="color: var(--cool-teal); border-bottom-color: color-mix(in oklch, var(--cool-teal) 45%, transparent);">
-                  <span class="arch-titlebar__label">Copilot CLI</span>
-                  <span class="arch-titlebar__line" style="background: var(--cool-teal);"></span>
-                </div>
-                <div class="arch-agent-body">
-                  <div style="color: var(--cool-teal); font-size: 11px; margin-bottom: 4px;">native CLI + SDK</div>
-                  <div style="color: var(--mocha-subtext0); font-size: 11px;">session</div>
-                </div>
-              </div>
+          <!-- ==========================================================
+               TEXT — sharp, full saturation, real weight
+               ========================================================== -->
 
-            </div>
-            <!-- /three agent panes -->
+          <!-- Configs -->
+          <text class="sk-text sk-text--title" x="110" y="72" text-anchor="middle" fill="var(--mocha-subtext0)">your repo</text>
+          <g class="sk-text sk-text--body" fill="var(--mocha-text)">
+            <text x="34" y="132">.claude</text>
+            <text x="34" y="172">.opencode</text>
+            <text x="34" y="212">.github</text>
+            <text x="34" y="252">.agents/skills</text>
+            <text x="34" y="292">.devcontainer</text>
+            <text x="34" y="332">.mcp.json</text>
+          </g>
+          <text class="sk-text sk-text--hint" x="110" y="376" text-anchor="middle" fill="var(--mocha-subtext0)" opacity="0.85">configs you already have</text>
 
-          </div>
-          <!-- /Atomic TypeScript workflow pane -->
+          <!-- Workflow -->
+          <text class="sk-text sk-text--title" x="490" y="42" text-anchor="middle" fill="var(--cool-blue)">your workflow file</text>
+          <text class="sk-text sk-text--hint" x="490" y="78" text-anchor="middle" fill="color-mix(in oklch, var(--cool-blue) 75%, white 25%)">a sequence of steps you write once</text>
 
-        </div>
-        <!-- /your repo inner content -->
+          <g class="sk-text" fill="var(--mocha-text)">
+            <text class="sk-text--step-num" x="334" y="142" fill="var(--cool-blue)">1.</text>
+            <text class="sk-text--body"     x="358" y="142">plan the change</text>
 
-      </div>
-      <!-- /your repo outer pane -->
+            <text class="sk-text--step-num" x="334" y="194" fill="var(--cool-blue)">2.</text>
+            <text class="sk-text--body"     x="358" y="194">make the edits</text>
 
-      <!-- Bottom ribbon: tools · codebase · devcontainer · review gate · PR · report -->
-      <div style="margin-top: 18px;">
-        <div class="arch-ribbon">
-          <span class="arch-ribbon__tag">Tools</span>
-          <span class="arch-ribbon__dot">·</span>
-          <span class="arch-ribbon__tag">codebase</span>
-          <span class="arch-ribbon__dot">·</span>
-          <span class="arch-ribbon__tag">devcontainer</span>
-          <span class="arch-ribbon__dot">·</span>
-          <span class="arch-ribbon__tag">review gate</span>
-          <span class="arch-ribbon__dot">·</span>
-          <span class="arch-ribbon__tag">PR</span>
-          <span class="arch-ribbon__dot">·</span>
-          <span class="arch-ribbon__tag">report</span>
-        </div>
+            <text class="sk-text--step-num" x="334" y="246" fill="var(--cool-blue)">3.</text>
+            <text class="sk-text--body"     x="358" y="246">review &amp; test</text>
+
+            <text class="sk-text--step-num" x="334" y="298" fill="var(--cool-blue)">4.</text>
+            <text class="sk-text--body"     x="358" y="298">open the PR</text>
+          </g>
+
+          <g class="sk-dots">
+            <circle cx="346" cy="350" r="2.6"/>
+            <circle cx="358" cy="350" r="2.6"/>
+            <circle cx="370" cy="350" r="2.6"/>
+          </g>
+          <text class="sk-text sk-text--hint" x="386" y="354" fill="color-mix(in oklch, var(--cool-blue) 65%, white 35%)">add as many as you need</text>
+
+          <!-- Agent -->
+          <text class="sk-text sk-text--title" x="860" y="72" text-anchor="middle" fill="var(--warm-peach)">agent</text>
+          <text class="sk-text sk-text--hint" x="860" y="116" text-anchor="middle" fill="color-mix(in oklch, var(--warm-peach) 78%, white 22%)">pick one</text>
+
+          <g class="sk-text sk-text--body" fill="var(--mocha-text)">
+            <text x="800" y="170">Claude Code</text>
+            <text x="800" y="216">OpenCode</text>
+            <text x="800" y="262">Copilot CLI</text>
+          </g>
+
+          <text class="sk-text sk-text--hint" x="860" y="348" text-anchor="middle" fill="color-mix(in oklch, var(--warm-peach) 60%, white 40%)">swap any time —</text>
+          <text class="sk-text sk-text--hint" x="860" y="368" text-anchor="middle" fill="color-mix(in oklch, var(--warm-peach) 60%, white 40%)">same workflow</text>
+
+          <!-- Output -->
+          <text class="sk-text sk-text--title" x="1085" y="72" text-anchor="middle" fill="var(--cool-teal)">output</text>
+
+          <g class="sk-text sk-text--body" fill="var(--mocha-text)">
+            <text x="1036" y="138">a PR</text>
+            <text x="1036" y="184">a report</text>
+            <text x="1036" y="230">a merge</text>
+            <text x="1036" y="276">a ping</text>
+          </g>
+
+          <text class="sk-text sk-text--hint" x="1085" y="348" text-anchor="middle" fill="color-mix(in oklch, var(--cool-teal) 65%, white 35%)">whatever you</text>
+          <text class="sk-text sk-text--hint" x="1085" y="368" text-anchor="middle" fill="color-mix(in oklch, var(--cool-teal) 65%, white 35%)">wired up</text>
+
+          <!-- ==========================================================
+               EDGE LABELS — pill-backed badges so they interrupt the
+               arrows cleanly and don't bleed into the canvas
+               ========================================================== -->
+
+          <!-- reads -->
+          <rect class="sk-edge-pill" x="222" y="204" width="56" height="22" rx="11" filter="url(#rough)"/>
+          <text class="sk-text sk-text--edge" x="250" y="220" text-anchor="middle" fill="var(--mocha-subtext0)">reads</text>
+
+          <!-- runs on -->
+          <rect class="sk-edge-pill" x="699" y="204" width="62" height="22" rx="11" filter="url(#rough)"/>
+          <text class="sk-text sk-text--edge" x="730" y="220" text-anchor="middle" fill="var(--warm-peach)">runs on</text>
+
+          <!-- ships -->
+          <rect class="sk-edge-pill" x="958" y="204" width="54" height="22" rx="11" filter="url(#rough)"/>
+          <text class="sk-text sk-text--edge" x="985" y="220" text-anchor="middle" fill="var(--cool-teal)">ships</text>
+
+        </svg>
       </div>
 
     </div>
-    <!-- /slide__content -->
-
   </div>
-  <!-- /slide -->
 </body>
 </html>
