@@ -4,17 +4,13 @@
       "type": "http",
       "url": "https://api.githubcopilot.com/mcp",
       "headers": {
-        "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+        "Authorization": "Bearer ${GH_TOKEN}"
       }
     },
     "azure-devops": {
       "type": "stdio",
       "command": "bunx",
-      "args": [
-        "-y",
-        "@azure-devops/mcp",
-        "<your-org>"
-      ]
+      "args": ["-y", "@azure-devops/mcp", "<your-org>"]
     }
   }
 }
