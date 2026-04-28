@@ -45,9 +45,9 @@
     .headline {
       font-family: var(--font-display);
       font-weight: 700;
-      font-size: 50px;
+      font-size: 56px;
       line-height: 1.02;
-      letter-spacing: -0.028em;
+      letter-spacing: -0.030em;
       color: var(--mocha-text);
       max-width: 1100px;
     }
@@ -62,11 +62,11 @@
 
     .subhead {
       font-family: var(--font-body);
-      font-size: 17px;
+      font-size: 18px;
       color: var(--text-on-gradient);
       line-height: 1.45;
       max-width: 780px;
-      margin-top: 10px;
+      margin-top: 12px;
     }
 
     /* -----------------------------------------------------------------------
@@ -78,11 +78,11 @@
     .catalog {
       flex: 1;
       display: grid;
-      grid-template-columns: 1.32fr 1px 1fr;
-      column-gap: 40px;
-      align-items: stretch;
-      margin-top: 22px;
-      padding: 24px 0 18px;
+      grid-template-columns: 1.18fr 1px 1fr;
+      column-gap: 44px;
+      align-items: start;
+      margin-top: 32px;
+      padding: 32px 0 28px;
       position: relative;
     }
 
@@ -125,7 +125,7 @@
     .col {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 24px;
       min-width: 0;
     }
 
@@ -165,7 +165,7 @@
     .entry {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 10px;
     }
 
     .entry__head {
@@ -192,8 +192,8 @@
       line-height: 1.05;
     }
 
-    .col--builtin .entry__name { font-size: 26px; color: var(--cool-sapphire); }
-    .col--byo     .entry__name { font-size: 20px; color: var(--warm-peach); }
+    .col--builtin .entry__name { font-size: 34px; color: var(--cool-sapphire); }
+    .col--byo     .entry__name { font-size: 26px; color: var(--warm-peach); }
 
     /* The second built-in name uses mauve, the third user one teal etc. so
        the column doesn't read as one wash of color. */
@@ -204,28 +204,29 @@
     .entry--accent-pink   .entry__name  { color: var(--mocha-pink); }
     .entry--accent-pink   .entry__glyph { color: var(--mocha-pink); }
 
-    .entry__desc {
-      font-family: var(--font-body);
-      color: var(--mocha-subtext1);
-      letter-spacing: -0.005em;
+    /* 3-word compact tag replacing the old 2-line description */
+    .entry__tag {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--mocha-subtext0);
+      background: oklch(20% 0.03 240 / 0.55);
+      border: 1px solid oklch(40% 0.06 240 / 0.30);
+      padding: 3px 10px;
+      border-radius: 3px;
+      line-height: 1.5;
     }
 
-    .col--builtin .entry__desc {
-      font-size: 14.5px;
-      line-height: 1.4;
-      max-width: 58ch;
-    }
-
-    .col--byo .entry__desc {
-      font-size: 13px;
-      line-height: 1.38;
-      max-width: 42ch;
-    }
+    .col--builtin .entry__tag { font-size: 12.5px; }
+    .col--byo     .entry__tag { font-size: 11.5px; }
 
     /* Stage chain — inline mono, separators between */
     .stages {
       font-family: var(--font-mono);
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--mocha-subtext0);
       letter-spacing: 0.01em;
       display: flex;
@@ -256,6 +257,7 @@
     /* Separator between entries within a column */
     .entry-sep {
       height: 1px;
+      margin: 4px 0;
       background: linear-gradient(
         90deg,
         var(--mocha-overlay0) 0%,
@@ -263,42 +265,6 @@
         transparent 100%
       );
       opacity: 0.25;
-    }
-
-    /* -----------------------------------------------------------------------
-       Tail entry — "build your own" call-to-action, italic body text
-    ----------------------------------------------------------------------- */
-    .entry--tail {
-      margin-top: 6px;
-      padding-top: 14px;
-      border-top: 1px dashed color-mix(in oklch, var(--warm-peach) 35%, transparent);
-    }
-
-    .entry--tail .entry__name {
-      font-size: 18px;
-      font-style: italic;
-      font-weight: 500;
-      color: var(--mocha-subtext1);
-    }
-
-    .entry--tail .entry__glyph {
-      color: var(--warm-peach);
-      opacity: 0.85;
-    }
-
-    .entry--tail .entry__desc {
-      font-size: 13px;
-      color: var(--mocha-subtext0);
-    }
-
-    .entry--tail code {
-      font-family: var(--font-mono);
-      font-size: 12.5px;
-      color: var(--warm-peach);
-      background: color-mix(in oklch, var(--warm-peach) 10%, transparent);
-      padding: 1px 6px;
-      border-radius: 3px;
-      letter-spacing: -0.01em;
     }
 
     /* -----------------------------------------------------------------------
@@ -341,7 +307,7 @@
       </h1>
 
       <p class="subhead">
-        Two ship in the box. The rest you compose in TypeScript — same primitives, your problem space.
+        Two ship in the box. Compose the rest in TypeScript.
       </p>
 
       <!-- Editorial catalog -->
@@ -361,11 +327,7 @@
               <span class="entry__glyph">01</span>
               <span class="entry__name">ralph</span>
             </div>
-            <p class="entry__desc">
-              Plan, orchestrate, then review in parallel — bounded loop that
-              re-plans on findings and exits when both reviewers agree the patch
-              is correct.
-            </p>
+            <span class="entry__tag">plan · orchestrate · review</span>
             <div class="stages">
               <span>plan</span>
               <span class="stages__sep">▸</span>
@@ -385,11 +347,7 @@
               <span class="entry__glyph">02</span>
               <span class="entry__name">deep-research-codebase</span>
             </div>
-            <p class="entry__desc">
-              Distributed multi-agent codebase research — locator, pattern-finder,
-              analyzer and online researcher run in isolated sessions per
-              partition, then a single aggregator stitches the report.
-            </p>
+            <span class="entry__tag">scout · partition · aggregate</span>
             <div class="stages">
               <span>scout</span>
               <span class="stages__sep">▸</span>
@@ -424,10 +382,7 @@
               <span class="entry__glyph">→</span>
               <span class="entry__name">PR UX Review</span>
             </div>
-            <p class="entry__desc">
-              Catch UX regressions before merge — diff against a design checklist,
-              file inline notes.
-            </p>
+            <span class="entry__tag">diff · audit · comment</span>
             <div class="stages">
               <span>scan diff</span>
               <span class="stages__sep">▸</span>
@@ -445,10 +400,7 @@
               <span class="entry__glyph">→</span>
               <span class="entry__name">Prod Alert Triage</span>
             </div>
-            <p class="entry__desc">
-              Pageable signal in, draft postmortem out — pull logs, propose a fix,
-              hand off to on-call.
-            </p>
+            <span class="entry__tag">logs · diagnose · hand off</span>
             <div class="stages">
               <span>inspect logs</span>
               <span class="stages__sep">▸</span>
@@ -456,39 +408,6 @@
               <span class="stages__sep">▸</span>
               <span>hand off</span>
             </div>
-          </div>
-
-          <div class="entry-sep"></div>
-
-          <!-- Multi-Persona Feedback -->
-          <div class="entry entry--accent-pink">
-            <div class="entry__head">
-              <span class="entry__glyph">→</span>
-              <span class="entry__name">Multi-Persona Feedback</span>
-            </div>
-            <p class="entry__desc">
-              Same artifact, three lenses — design, eng, and PM critique in
-              parallel before you ship.
-            </p>
-            <div class="stages">
-              <span>design</span>
-              <span class="stages__par">∥</span>
-              <span>eng</span>
-              <span class="stages__par">∥</span>
-              <span>pm</span>
-            </div>
-          </div>
-
-          <!-- Tail: build your own -->
-          <div class="entry entry--tail">
-            <div class="entry__head">
-              <span class="entry__glyph">+</span>
-              <span class="entry__name">scaffold the next one</span>
-            </div>
-            <p class="entry__desc">
-              Describe it in English. <code>workflow-creator</code> writes the
-              TypeScript.
-            </p>
           </div>
 
         </div>
