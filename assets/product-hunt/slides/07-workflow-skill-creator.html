@@ -413,7 +413,7 @@
     <div class="film-grain"></div>
 
     <!-- Content layer -->
-    <div class="slide__content" style="padding: 32px 56px 24px; display: flex; flex-direction: column;">
+    <div class="slide__content" style="padding: 32px 56px 32px; display: flex; flex-direction: column;">
 
       <!-- Wordmark -->
       <div style="display: flex; align-items: center; margin-bottom: 14px;">
@@ -428,7 +428,7 @@
         line-height: 1.04;
         letter-spacing: -0.025em;
         color: var(--mocha-text);
-        margin-bottom: 10px;
+        margin-bottom: 16px;
         position: relative;
         z-index: 2;
         max-width: 960px;
@@ -436,11 +436,6 @@
         Create workflows in
         <span class="bubble-text bubble-text--warm" data-text="natural language">natural language</span>.
       </h1>
-
-      <!-- Subhead -->
-      <p class="subhead" style="font-size: 17px; max-width: 760px; margin-bottom: 18px; position: relative; z-index: 2; color: var(--text-on-gradient);">
-        Describe what you want. The <code style="font-family:var(--font-mono);color:var(--mocha-mauve);">workflow-creator</code> skill scaffolds a TypeScript file you can read, edit, and run.
-      </p>
 
       <!-- THREE-PANEL DIAGRAM -->
       <div style="
@@ -458,11 +453,7 @@
              PANEL 1 — PROMPT / agent chat
              ============================================================ -->
         <div style="flex: 0 0 296px; display: flex; flex-direction: column; gap: 6px; min-width: 0;">
-          <div class="col-header" style="color: oklch(88% 0.08 25);">Describe</div>
-          <div style="display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px;">
-            <div class="col-sublabel" style="color: oklch(85% 0.06 25);">→ plain-english intent</div>
-            <div class="col-sublabel" style="color: var(--mocha-mauve);">→ workflow-creator skill</div>
-          </div>
+          <div class="col-header" style="color: oklch(88% 0.08 25); margin-bottom: 6px;">Describe</div>
 
           <div class="prompt-pane">
             <div class="prompt-pane__titlebar">
@@ -521,11 +512,7 @@
              PANEL 2 — CODE pane (editable)
              ============================================================ -->
         <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative;">
-          <div class="col-header" style="color: var(--mocha-mauve);">Edit</div>
-          <div style="display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px;">
-            <div class="col-sublabel" style="color: var(--mocha-mauve);">→ TypeScript you own</div>
-            <div class="col-sublabel" style="color: var(--text-on-gradient-dim);">→ tweak prompts, add stages</div>
-          </div>
+          <div class="col-header" style="color: var(--mocha-mauve); margin-bottom: 6px;">Edit</div>
 
           <div style="position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0;">
             <div class="edit-pill">edit me</div>
@@ -562,11 +549,7 @@
              PANEL 3 — RUNNING TUI
              ============================================================ -->
         <div style="flex: 0 0 322px; display: flex; flex-direction: column; gap: 6px; min-width: 0;">
-          <div class="col-header" style="color: var(--cool-sapphire);">Run</div>
-          <div style="display: flex; flex-direction: column; gap: 1px; margin-bottom: 4px;">
-            <div class="col-sublabel" style="color: var(--cool-sapphire);">→ atomic workflow -n release-notes</div>
-            <div class="col-sublabel" style="color: var(--cool-teal);">→ stages live in tmux</div>
-          </div>
+          <div class="col-header" style="color: var(--cool-sapphire); margin-bottom: 6px;">Run</div>
 
           <div class="tui-wrap">
             <div class="tui-wrap__header">
@@ -696,20 +679,6 @@
       </div>
       <!-- END THREE-PANEL DIAGRAM -->
 
-      <!-- Bottom caption -->
-      <p style="
-        font-family: var(--font-body);
-        font-size: 15px;
-        font-style: italic;
-        font-weight: 500;
-        color: var(--text-on-gradient);
-        margin-top: 14px;
-        position: relative;
-        z-index: 2;
-        max-width: 920px;
-      ">
-        Plain English in. Editable TypeScript out. Real, observable execution downstream — no canvas, no lock-in.
-      </p>
 
     </div>
   </div>
