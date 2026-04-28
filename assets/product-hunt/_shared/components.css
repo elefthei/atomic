@@ -265,16 +265,16 @@
 }
 
 .bubble-text--cool {
-  color: oklch(92% 0.06 195);
+  color: oklch(91% 0.06 235);
   text-shadow:
-    0   2px   5px oklch(25% 0.22 220 / 0.90),
-    0   6px  18px oklch(20% 0.24 220 / 0.70),
-    0  14px  36px oklch(18% 0.20 220 / 0.55),
-    0  24px  60px oklch(15% 0.16 220 / 0.38),
-    -1px -2px  0   oklch(80% 0.10 195 / 0.60),
-    -3px -5px 12px oklch(95% 0.04 200 / 0.38),
-    -5px -8px 20px oklch(97% 0.02 200 / 0.22),
-    0   4px   8px oklch(10% 0.08 220 / 0.35);
+    0   2px   5px oklch(35% 0.20 195 / 0.90),
+    0   6px  18px oklch(28% 0.22 195 / 0.70),
+    0  14px  36px oklch(22% 0.18 195 / 0.55),
+    0  24px  60px oklch(18% 0.14 195 / 0.38),
+    0   4px   8px oklch(20% 0.18 190 / 0.40),
+    /* outer hue halo — traces letter contour, very subtle */
+    0   0    1.5px oklch(80% 0.14 235 / 0.32),
+    0   0    9px   oklch(72% 0.16 235 / 0.16);
 }
 
 .bubble-text--cream {
@@ -312,12 +312,7 @@
 }
 
 .bubble-text--cool::before {
-  background: radial-gradient(
-    ellipse 55% 38% at 25% 18%,
-    oklch(95% 0.04 200 / 0.55) 0%,
-    oklch(93% 0.04 200 / 0.25) 35%,
-    transparent 65%
-  );
+  display: none;
 }
 
 
@@ -439,6 +434,11 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--cool-teal);
+  /* outer hue halo — traces letter contour, very subtle.
+     currentColor so it tracks any local override (e.g. slide 01). */
+  text-shadow:
+    0 0 0.5px color-mix(in oklch, currentColor 30%, transparent),
+    0 0 3px   color-mix(in oklch, currentColor 14%, transparent);
 }
 
 .headline {
@@ -451,7 +451,13 @@
 }
 
 .headline--warm { color: var(--warm-peach); }
-.headline--cool { color: var(--cool-sky); }
+.headline--cool {
+  color: var(--cool-sky);
+  /* outer hue halo — traces letter contour, very subtle */
+  text-shadow:
+    0 0 1px oklch(85% 0.09 215 / 0.28),
+    0 0 6px oklch(78% 0.12 215 / 0.16);
+}
 .headline--cream { color: var(--cream-text); }
 
 .subhead {

@@ -149,6 +149,29 @@
     #tui-wrap .tui__graph {
       gap: 10px;
     }
+
+    /* Override --awaiting to use --mocha-blue (matches src/sdk/components/
+       node-card.tsx, where awaiting maps to theme.info → theme.accent → Blue),
+       not the shared CSS default of --mocha-sky. */
+    #tui-wrap .tui__node--awaiting          { border-color: var(--mocha-blue); }
+    #tui-wrap .tui__node-duration--awaiting { color: var(--mocha-blue); }
+
+    /* Statusbar info: prevent wrap so the line stays inside the bar even
+       when the TUI column is narrow. */
+    #tui-wrap .tui__statusbar-info {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+
+    /* Statusbar hint keys: breathing room between adjacent arrow glyphs
+       (↑↓←→) so the keycap reads as a row of keys, not a smudge. Single-
+       character keys (↵, q) are unaffected in practice — the trailing
+       space falls inside the existing 3px gap before the label. */
+    #tui-wrap .tui__hint-key {
+      letter-spacing: 0.12em;
+    }
   </style>
 </head>
 <body>
@@ -238,19 +261,20 @@
 <span class="ln">11</span>    <span class="tk-prop">prompt</span><span class="tk-pun">:</span> <span class="tk-str">'Review diff for security, perf, clarity.'</span><span class="tk-pun">,</span>
 <span class="ln">12</span>  <span class="tk-pun">});</span>
 <span class="ln">13</span>
-<span class="ln">14</span>  <span class="tk-cmt">  // branch: only audit if findings exist</span>
+<span class="ln">14</span>  <span class="tk-cmt">  // stage 2: parallel audits if findings exist</span>
 <span class="ln">15</span>  <span class="tk-kw">  if</span> <span class="tk-pun">(</span><span class="tk-txt">review</span><span class="tk-pun">.</span><span class="tk-prop">findings</span><span class="tk-pun">.</span><span class="tk-prop">length</span> <span class="tk-pun">&gt;</span> <span class="tk-num">0</span><span class="tk-pun">) {</span>
-<span class="ln">16</span>    <span class="tk-kw">  await</span> <span class="tk-txt">ctx</span><span class="tk-pun">.</span><span class="tk-fn">stage</span><span class="tk-pun">(</span><span class="tk-str">'security-audit'</span><span class="tk-pun">, {</span>
-<span class="ln">17</span>      <span class="tk-prop">agent</span><span class="tk-pun">:</span> <span class="tk-str">'opencode'</span><span class="tk-pun">,</span>
-<span class="ln">18</span>    <span class="tk-pun">  });</span>
-<span class="ln">19</span>  <span class="tk-pun">  }</span>
-<span class="ln">20</span>
-<span class="ln">21</span>  <span class="tk-cmt">  // stage 3: require human sign-off</span>
-<span class="ln">22</span>  <span class="tk-kw">  await</span> <span class="tk-txt">ctx</span><span class="tk-pun">.</span><span class="tk-fn">stage</span><span class="tk-pun">(</span><span class="tk-str">'human-approval'</span><span class="tk-pun">, {</span>
-<span class="ln">23</span>    <span class="tk-prop">require</span><span class="tk-pun">:</span> <span class="tk-str">'maintainer'</span><span class="tk-pun">,</span>
-<span class="ln">24</span>  <span class="tk-pun">});</span>
-<span class="ln">25</span><span class="tk-pun">})</span>
-<span class="ln">26</span><span class="tk-pun">.</span><span class="tk-fn">compile</span><span class="tk-pun">();</span></div>
+<span class="ln">16</span>    <span class="tk-kw">  await</span> <span class="tk-ty">Promise</span><span class="tk-pun">.</span><span class="tk-fn">all</span><span class="tk-pun">([</span>
+<span class="ln">17</span>      <span class="tk-txt">ctx</span><span class="tk-pun">.</span><span class="tk-fn">stage</span><span class="tk-pun">(</span><span class="tk-str">'security-audit'</span><span class="tk-pun">, { </span><span class="tk-prop">agent</span><span class="tk-pun">: </span><span class="tk-str">'opencode'</span> <span class="tk-pun">}),</span>
+<span class="ln">18</span>      <span class="tk-txt">ctx</span><span class="tk-pun">.</span><span class="tk-fn">stage</span><span class="tk-pun">(</span><span class="tk-str">'ci-checks'</span><span class="tk-pun">,      { </span><span class="tk-prop">agent</span><span class="tk-pun">: </span><span class="tk-str">'copilot-cli'</span> <span class="tk-pun">}),</span>
+<span class="ln">19</span>    <span class="tk-pun">]);</span>
+<span class="ln">20</span>  <span class="tk-pun">  }</span>
+<span class="ln">21</span>
+<span class="ln">22</span>  <span class="tk-cmt">  // stage 3: require human sign-off</span>
+<span class="ln">23</span>  <span class="tk-kw">  await</span> <span class="tk-txt">ctx</span><span class="tk-pun">.</span><span class="tk-fn">stage</span><span class="tk-pun">(</span><span class="tk-str">'human-approval'</span><span class="tk-pun">, {</span>
+<span class="ln">24</span>    <span class="tk-prop">require</span><span class="tk-pun">:</span> <span class="tk-str">'maintainer'</span><span class="tk-pun">,</span>
+<span class="ln">25</span>  <span class="tk-pun">});</span>
+<span class="ln">26</span><span class="tk-pun">})</span>
+<span class="ln">27</span><span class="tk-pun">.</span><span class="tk-fn">compile</span><span class="tk-pun">();</span></div>
           </div>
         </div>
 
@@ -262,18 +286,18 @@
             <!-- Header bar: GRAPH mode, workflow running -->
             <div class="tui__header">
               <div class="tui__header-badge tui__header-badge--graph">GRAPH</div>
-              <span class="tui__header-session">pr-review · claude</span>
+              <span class="tui__header-session">pr-review · workflow</span>
               <div class="tui__header-counts">
-                <span class="tui__count"><span class="tui-green">✓</span><span class="tui-dim"> 1</span></span>
-                <span class="tui__count"><span class="tui-yellow">●</span><span class="tui-dim"> 3</span></span>
-                <span class="tui__count"><span class="tui-dim">○</span><span class="tui-dim"> 0</span></span>
+                <span class="tui__count"><span class="tui-green">✓</span><span class="tui-dim"> 3</span></span>
+                <span class="tui__count"><span class="tui-blue">↵</span><span class="tui-dim"> 1</span></span>
+                <span class="tui__count"><span class="tui-dim">○ 0</span></span>
               </div>
             </div>
 
             <!-- Body: sidebar + main -->
             <div class="tui__body">
 
-              <!-- Sidebar: workflow selected -->
+              <!-- Sidebar: workflow stages -->
               <div class="tui__sidebar">
                 <div class="tui__sidebar-header">
                   <div class="tui__sidebar-header-badge tui__sidebar-header-badge--claude">CLAUDE</div>
@@ -283,24 +307,24 @@
                 <div class="tui__workflow-list">
                   <div class="tui__section-label">
                     <span class="tui__section-label-bar">▎</span>
-                    <span class="tui__section-label-text">sessions</span>
+                    <span class="tui__section-label-text">stages</span>
                   </div>
 
-                  <div class="tui__row tui__row--active">
-                    <span class="tui__spinner">⠹</span>
-                    <span class="tui__row-name tui-yellow">orchestrator</span>
-                  </div>
-                  <div class="tui__row tui__row--focused">
-                    <span class="tui__spinner">⠼</span>
-                    <span class="tui__row-name tui-yellow">claude-code</span>
+                  <div class="tui__row">
+                    <span class="tui__row-indicator tui-green">✓</span>
+                    <span class="tui__row-name">review</span>
                   </div>
                   <div class="tui__row">
-                    <span class="tui__spinner tui-dim">⠴</span>
-                    <span class="tui__row-name tui-yellow">opencode</span>
+                    <span class="tui__row-indicator tui-green">✓</span>
+                    <span class="tui__row-name tui-green">security-audit</span>
                   </div>
                   <div class="tui__row">
-                    <span class="tui__spinner tui-dim">⠦</span>
-                    <span class="tui__row-name tui-yellow">copilot-cli</span>
+                    <span class="tui__row-indicator tui-green">✓</span>
+                    <span class="tui__row-name tui-green">ci-checks</span>
+                  </div>
+                  <div class="tui__row tui__row--focused tui__row--active">
+                    <span class="tui__row-indicator tui-blue">↵</span>
+                    <span class="tui__row-name tui-blue">human-approval</span>
                   </div>
 
                   <div class="tui__section-label" style="margin-top:8px;">
@@ -318,63 +342,66 @@
                 </div>
               </div>
 
-              <!-- Main pane: session graph -->
+              <!-- Main pane: stage graph (review → [security-audit ∥ ci-checks] → human-approval) -->
               <div class="tui__main">
-                <div class="tui__graph" style="flex-direction:column;gap:0;padding:14px 20px;">
+                <div class="tui__graph" style="flex-direction:column;gap:0;padding:12px 20px;">
 
-                  <!-- Orchestrator node (done) -->
-                  <div style="display:flex;justify-content:center;margin-bottom:0;">
+                  <!-- Stage 1: review (done) -->
+                  <div style="display:flex;justify-content:center;">
                     <div class="tui__node tui__node--done" style="width:110px;">
-                      <div class="tui__node-title">orchestrator</div>
-                      <div class="tui__node-duration tui__node-duration--done">0:04</div>
+                      <div class="tui__node-title">review</div>
+                      <div class="tui__node-duration tui__node-duration--done">0:42</div>
+                      <div class="tui__node-hint tui-dim">claude-code</div>
                     </div>
                   </div>
 
-                  <!-- Connector line down -->
-                  <div style="display:flex;justify-content:center;height:14px;">
+                  <!-- Connector line down to fan-out -->
+                  <div style="display:flex;justify-content:center;height:12px;">
                     <div style="width:1px;background:var(--mocha-overlay0);height:100%;"></div>
                   </div>
 
-                  <!-- 3 parallel agents -->
+                  <!-- Fan-out: parallel stages -->
                   <div style="display:flex;justify-content:center;">
                     <div style="display:flex;flex-direction:row;gap:8px;align-items:flex-start;">
 
-                      <!-- Agent 1: claude-code -->
+                      <!-- Stage 2a: security-audit (done) -->
                       <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
-                        <div style="width:1px;background:var(--mocha-overlay0);height:14px;"></div>
-                        <div class="tui__node tui__node--running tui__node--focused" style="width:110px;min-height:54px;">
-                          <div class="tui__node-title">claude-code</div>
-                          <div class="tui__node-duration tui__node-duration--running">
-                            <span class="tui__spinner">⠹</span> 1:12
+                        <div style="width:1px;background:var(--mocha-overlay0);height:12px;"></div>
+                        <div class="tui__node tui__node--done" style="width:110px;min-height:54px;">
+                          <div class="tui__node-title">security-audit</div>
+                          <div class="tui__node-duration tui__node-duration--done">
+                            <span class="tui-green">✓</span> 0:58
                           </div>
-                          <div class="tui__node-hint tui-dim">scan diff</div>
+                          <div class="tui__node-hint tui-dim">opencode</div>
                         </div>
                       </div>
 
-                      <!-- Agent 2: opencode -->
+                      <!-- Stage 2b: ci-checks (done) -->
                       <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
-                        <div style="width:1px;background:var(--mocha-overlay0);height:14px;"></div>
-                        <div class="tui__node tui__node--running" style="width:110px;min-height:54px;">
-                          <div class="tui__node-title">opencode</div>
-                          <div class="tui__node-duration tui__node-duration--running">
-                            <span class="tui__spinner tui-dim">⠼</span> 0:58
+                        <div style="width:1px;background:var(--mocha-overlay0);height:12px;"></div>
+                        <div class="tui__node tui__node--done" style="width:110px;min-height:54px;">
+                          <div class="tui__node-title">ci-checks</div>
+                          <div class="tui__node-duration tui__node-duration--done">
+                            <span class="tui-green">✓</span> 1:03
                           </div>
-                          <div class="tui__node-hint tui-dim">audit</div>
+                          <div class="tui__node-hint tui-dim">copilot-cli</div>
                         </div>
                       </div>
 
-                      <!-- Agent 3: copilot -->
-                      <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
-                        <div style="width:1px;background:var(--mocha-overlay0);height:14px;"></div>
-                        <div class="tui__node tui__node--running" style="width:110px;min-height:54px;">
-                          <div class="tui__node-title">copilot-cli</div>
-                          <div class="tui__node-duration tui__node-duration--running">
-                            <span class="tui__spinner tui-dim">⠦</span> 1:03
-                          </div>
-                          <div class="tui__node-hint tui-dim">ci-checks</div>
-                        </div>
-                      </div>
+                    </div>
+                  </div>
 
+                  <!-- Connector line down to join -->
+                  <div style="display:flex;justify-content:center;height:12px;">
+                    <div style="width:1px;background:var(--mocha-overlay0);height:100%;"></div>
+                  </div>
+
+                  <!-- Stage 3: human-approval (awaiting gate) -->
+                  <div style="display:flex;justify-content:center;">
+                    <div class="tui__node tui__node--awaiting tui__node--focused" style="width:110px;">
+                      <div class="tui__node-title">human-approval</div>
+                      <div class="tui__node-duration tui__node-duration--awaiting">↵ awaiting</div>
+                      <div class="tui__node-hint tui-dim">maintainer</div>
                     </div>
                   </div>
 
@@ -386,7 +413,7 @@
             <!-- Statusbar -->
             <div class="tui__statusbar">
               <div class="tui__statusbar-badge tui__statusbar-badge--graph">GRAPH</div>
-              <span class="tui__statusbar-info tui-yellow">● 3 background</span>
+              <span class="tui__statusbar-info tui-blue">↵ awaiting maintainer</span>
               <div class="tui__statusbar-spacer"></div>
               <div class="tui__statusbar-hints">
                 <span class="tui__hint">
