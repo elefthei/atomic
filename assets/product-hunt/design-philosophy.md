@@ -30,3 +30,5 @@ bun run assets/product-hunt/generate-product-hunt-assets.ts
 | 4 | Use cases | Dark + cool corner | — | Mocha + cool silk top-right |
 | 5 | Architecture | Light cream | — | `liquid-silk--cream` (cool right bleed) |
 | 6 | Safety / devcontainer | Cool | `lower` | `liquid-silk--cool` (saturated) |
+| 7 | Workflow Skill Creator | Warm + cool | — | `conic-sweep--creator` (warm left, cool right) |
+| 8 | CTA | Warm bookend | `now` | `conic-sweep--warm-anchor` (warm close, mirrors slide 01) |

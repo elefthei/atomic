@@ -172,6 +172,7 @@ describe("placeholder slide HTML files exist and link shared CSS", () => {
     "05-architecture.html",
     "06-safety-devcontainer.html",
     "07-workflow-skill-creator.html",
+    "08-cta.html",
   ];
 
   for (const slideFile of slideFiles) {
@@ -206,6 +207,7 @@ describe("PNG output files are present and correctly sized", () => {
     "05-architecture-diagram.png",
     "06-safety-devcontainer.png",
     "07-workflow-skill-creator.png",
+    "08-cta.png",
   ];
 
   for (const pngFile of pngFiles) {
@@ -238,17 +240,85 @@ describe("generate-product-hunt-assets.ts pipeline script", () => {
     expect(scriptContent).toContain("document.fonts.ready");
   });
 
-  test("renders exactly 7 slides", () => {
+  test("renders exactly 8 slides", () => {
     // Count SlideConfig entries via html: keys (inside the slides array literal only)
     const slidesArrayMatch = scriptContent.match(/const slides[^=]*=\s*\[([\s\S]*?)\];/);
     expect(slidesArrayMatch).not.toBeNull();
     const slidesArray = slidesArrayMatch![1];
     const htmlEntries = slidesArray.match(/\bhtml:/g);
-    expect(htmlEntries?.length).toBe(7);
+    expect(htmlEntries?.length).toBe(8);
   });
 
   test("viewport is 1270x760", () => {
     expect(scriptContent).toContain("1270");
     expect(scriptContent).toContain("760");
+  });
+});
+
+// ============================================================
+// Slide 08 CTA — specific content requirements
+// ============================================================
+
+describe("slide 08-cta.html content requirements", () => {
+  const slidePath = join(SLIDES, "08-cta.html");
+
+  test("file exists", () => {
+    expect(existsSync(slidePath)).toBe(true);
+  });
+
+  test("contains the real install command", () => {
+    const content = readFileSync(slidePath, "utf8");
+    // The real install command from package.json / README
+    expect(content).toContain("bun install -g @bastani/atomic");
+  });
+
+  test("uses a TUI chrome element to display install command", () => {
+    const content = readFileSync(slidePath, "utf8");
+    // Must show the command inside terminal chrome (tui-pane or similar)
+    expect(content).toContain("tui");
+  });
+
+  test("headline is 6 words or fewer", () => {
+    const content = readFileSync(slidePath, "utf8");
+    // Extract headline text from h1/h2 tag — simplified word count check
+    // Headline should reference short, punchy copy
+    const h1Match = content.match(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/);
+    expect(h1Match).not.toBeNull();
+    // Strip HTML tags and count words
+    const headlineText = h1Match![1].replace(/<[^>]+>/g, " ").trim();
+    const wordCount = headlineText.split(/\s+/).filter(w => w.length > 0).length;
+    expect(wordCount).toBeLessThanOrEqual(6);
+  });
+
+  test("does not contain banned gradient text fill", () => {
+    const content = readFileSync(slidePath, "utf8");
+    // Gradient text fill is banned — check no background-clip:text with linear-gradient on non-bubble elements
+    // The bubble-text ::before is allowed via components.css — local style should not add new gradient fills
+    const localStyleMatch = content.match(/<style>([\s\S]*?)<\/style>/);
+    if (localStyleMatch) {
+      const localStyle = localStyleMatch[1];
+      // Should not have both background: linear-gradient AND background-clip: text together
+      const hasGradientFill = /background:\s*linear-gradient[\s\S]{0,200}background-clip:\s*text/.test(localStyle);
+      expect(hasGradientFill).toBe(false);
+    }
+  });
+
+  test("composition is asymmetric (not centered hero card)", () => {
+    const content = readFileSync(slidePath, "utf8");
+    // Asymmetric layout: headline should be left-aligned or explicitly positioned
+    // Simple heuristic: should not have a centered flex container as its primary layout
+    expect(content).not.toContain('justify-content: center; align-items: center');
+  });
+
+  test("links all shared CSS files", () => {
+    const content = readFileSync(slidePath, "utf8");
+    expect(content).toContain("_shared/fonts.css");
+    expect(content).toContain("_shared/tokens.css");
+    expect(content).toContain("_shared/components.css");
+  });
+
+  test("has 1270 viewport width meta tag", () => {
+    const content = readFileSync(slidePath, "utf8");
+    expect(content).toContain("1270");
   });
 });

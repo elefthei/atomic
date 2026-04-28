@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1270">
+  <title>Atomic — Slide 08: CTA</title>
+  <link rel="stylesheet" href="../_shared/fonts.css">
+  <link rel="stylesheet" href="../_shared/tokens.css">
+  <link rel="stylesheet" href="../_shared/components.css">
+  <link rel="stylesheet" href="../_shared/tui.css">
+
+  <!--
+    COLOR POLE: Warm bookend.
+
+    Slide 01 opens with a warm conic sweep (maroon/red/peach), signaling
+    the problem space — uncontrolled agents. The gallery then travels through
+    cool orchestration (slides 02, 04, 06), pauses on cream (slide 05), and
+    closes here with the same warm pole as slide 01. This creates a deliberate
+    warm bracket: the viewer exits feeling that tension has resolved into
+    confident action, not a cool institutional exhale. The warm close also
+    reinforces the CTA as an invitation — excitement, not authority. A full-cool
+    close would suggest the story ends in the machine; warm closes in the human.
+
+    BUBBLE WORD: "now" — used once here only. It signals immediacy at the
+    conversion moment, the one place in the gallery where urgency is earned.
+    Sparingly applied per design philosophy.
+
+    COMPOSITION: Asymmetric editorial — large left-justified headline block
+    (~55% width), TUI chrome install command pinned to the upper-right as an
+    independent artifact, small footer copy anchored to the lower-right.
+    This mirrors Arc marketing's "object + context" pattern, not centered hero card.
+  -->
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1270px; height: 760px; overflow: hidden; }
+
+    /* Warm anchor: same family as slide 01, slightly more saturated to
+       signal arrival and resolution rather than opening tension */
+    .conic-sweep--cta {
+      --conic-from: 205deg;
+      --conic-at: 48% 52%;
+      --conic-saturate: 1.22;
+      --conic-opacity: 0.88;
+      --conic-vignette-size: 60% 68%;
+      --conic-vignette-at: 28% 48%;
+      --conic-vignette-strength: 0.62;
+    }
+
+    /* ------------------------------------------------------------------
+       LEFT: Headline block
+       ------------------------------------------------------------------ */
+    .cta-left {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 660px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 0 0 80px;
+      z-index: 3;
+    }
+
+    .cta-headline {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 96px;
+      line-height: 0.98;
+      letter-spacing: -0.030em;
+      color: var(--cream);
+      margin-bottom: 36px;
+    }
+
+    .cta-sub {
+      font-family: var(--font-body);
+      font-size: 17px;
+      font-weight: 400;
+      line-height: 1.5;
+      letter-spacing: -0.01em;
+      color: var(--text-on-gradient);
+      max-width: 42ch;
+    }
+
+    /* ------------------------------------------------------------------
+       RIGHT: TUI install chrome + footer
+       ------------------------------------------------------------------ */
+    .cta-right {
+      position: absolute;
+      right: 56px;
+      top: 104px;
+      width: 494px;
+      z-index: 3;
+    }
+
+    /* Terminal chrome wrapping the install command */
+    .install-pane {
+      background-color: oklch(13% 0.04 220 / 0.92);
+      border: 1.5px solid oklch(70% 0.18 215 / 0.75);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow:
+        0 28px 70px oklch(14% 0.06 240 / 0.60),
+        0  8px 24px oklch(10% 0.04 240 / 0.42);
+    }
+
+    .install-pane__titlebar {
+      display: flex;
+      align-items: center;
+      height: 30px;
+      padding: 0 14px;
+      background-color: oklch(18% 0.08 215 / 0.90);
+      border-bottom: 1px solid oklch(70% 0.18 215 / 0.40);
+      gap: 8px;
+    }
+
+    .install-pane__dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .install-pane__dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .install-pane__title {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      color: oklch(72% 0.08 215);
+      letter-spacing: 0.04em;
+      flex: 1;
+      text-align: center;
+      margin-right: 28px;
+    }
+
+    .install-pane__body {
+      padding: 22px 20px 24px;
+      font-family: var(--font-mono);
+      font-size: 14.5px;
+      line-height: 1.7;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .install-line {
+      display: flex;
+      align-items: baseline;
+      gap: 0;
+    }
+
+    .install-line__prompt {
+      color: oklch(68% 0.18 145);
+      font-weight: 600;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+
+    .install-line__cmd {
+      color: var(--mocha-text);
+      font-weight: 500;
+    }
+
+    .install-line__cmd em {
+      color: var(--cool-sapphire);
+      font-style: normal;
+    }
+
+    .install-line__cmd strong {
+      color: oklch(85% 0.12 50);
+      font-weight: 600;
+    }
+
+    .install-output {
+      padding-left: 22px;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .install-output__check {
+      color: oklch(68% 0.18 145);
+      font-size: 13px;
+    }
+
+    .install-output__text {
+      color: oklch(68% 0.02 280);
+      font-size: 13px;
+    }
+
+    .install-output__package {
+      color: oklch(80% 0.12 50);
+    }
+
+    .install-cursor {
+      display: inline-flex;
+      align-items: baseline;
+    }
+
+    .install-cursor__bar {
+      width: 9px;
+      height: 1.1em;
+      background-color: oklch(68% 0.18 145);
+      display: inline-block;
+      vertical-align: text-bottom;
+      opacity: 0.85;
+    }
+
+    /* Status bar row inside install pane */
+    .install-pane__statusbar {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 14px;
+      background-color: oklch(18% 0.06 215 / 0.90);
+      border-top: 1px solid oklch(70% 0.18 215 / 0.30);
+      gap: 12px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+    }
+
+    .install-pane__status-badge {
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: oklch(68% 0.18 145);
+    }
+
+    .install-pane__status-hint {
+      color: oklch(58% 0.04 240);
+      letter-spacing: 0.04em;
+    }
+
+    .install-pane__status-spacer {
+      flex: 1;
+    }
+
+    .install-pane__status-pkg {
+      color: oklch(62% 0.06 215);
+    }
+
+    /* ------------------------------------------------------------------
+       Footer caption — lower right, below install pane
+       ------------------------------------------------------------------ */
+    .cta-footer {
+      position: absolute;
+      right: 56px;
+      bottom: 48px;
+      z-index: 3;
+      text-align: right;
+    }
+
+    .cta-footer__text {
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0.01em;
+      color: var(--text-on-gradient-dim);
+    }
+
+    /* ------------------------------------------------------------------
+       Wordmark — upper left
+       ------------------------------------------------------------------ */
+    .cta-wordmark {
+      position: absolute;
+      top: 52px;
+      left: 80px;
+      z-index: 4;
+    }
+
+    /* ------------------------------------------------------------------
+       Slide number / arc marker — editorial left margin
+       ------------------------------------------------------------------ */
+    .arc-marker {
+      position: absolute;
+      left: 80px;
+      bottom: 52px;
+      z-index: 3;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: oklch(60% 0.08 25);
+    }
+
+    /* ------------------------------------------------------------------
+       Warm divider line — thin horizontal rule separating headline from sub
+       ------------------------------------------------------------------ */
+    .warm-rule {
+      width: 56px;
+      height: 1px;
+      background-color: oklch(65% 0.16 25 / 0.50);
+      margin-bottom: 20px;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="slide">
+
+    <!-- Warm conic backdrop — same pole as slide 01, warm bookend close -->
+    <div class="conic-sweep conic-sweep--warm-anchor conic-sweep--cta"></div>
+
+    <!-- Film grain -->
+    <div class="film-grain"></div>
+
+    <!-- Wordmark -->
+    <div class="cta-wordmark">
+      <div class="wordmark" style="color: color-mix(in oklch, var(--text-on-gradient) 80%, transparent);">ATOMIC</div>
+    </div>
+
+    <!-- LEFT: Headline block -->
+    <div class="cta-left">
+      <h1 class="cta-headline">
+        Ship workflows<br>
+        <span class="bubble-text bubble-text--warm" data-text="now"
+          style="font-size: inherit; line-height: inherit; letter-spacing: -0.034em;">now</span>.
+      </h1>
+      <div class="warm-rule"></div>
+      <p class="cta-sub">
+        Free, open-source. Works with Claude,<br>Copilot, and OpenCode.
+      </p>
+    </div>
+
+    <!-- RIGHT: Install command in TUI chrome -->
+    <div class="cta-right">
+      <div class="install-pane">
+        <div class="install-pane__titlebar">
+          <div class="install-pane__dots">
+            <div class="install-pane__dot" style="background: oklch(55% 0.20 10);"></div>
+            <div class="install-pane__dot" style="background: oklch(60% 0.18 50);"></div>
+            <div class="install-pane__dot" style="background: oklch(60% 0.15 145);"></div>
+          </div>
+          <div class="install-pane__title">zsh · ~</div>
+        </div>
+
+        <!-- install command: bun install -g @bastani/atomic -->
+        <div class="install-pane__body">
+          <div class="install-line">
+            <span class="install-line__prompt">$</span>
+            <span class="install-line__cmd">
+              <span style="color: var(--cool-sapphire);">bun</span> install -g <span style="color: oklch(85% 0.12 50); font-weight: 600;">@bastani/atomic</span>
+            </span>
+          </div>
+
+          <div class="install-output">
+            <span class="install-output__check">✓</span>
+            <span class="install-output__text">installed
+              <span class="install-output__package">@bastani/atomic@0.6.3</span>
+            </span>
+          </div>
+
+          <div class="install-output">
+            <span class="install-output__check">✓</span>
+            <span class="install-output__text">linked binary
+              <span class="install-output__package">atomic</span>
+              → ~/.bun/bin
+            </span>
+          </div>
+
+          <div style="height: 8px;"></div>
+
+          <div class="install-line">
+            <span class="install-line__prompt">$</span>
+            <span class="install-line__cmd" style="color: oklch(76% 0.08 215);">
+              atomic chat
+            </span>
+            <span class="install-cursor">
+              <span class="install-cursor__bar"></span>
+            </span>
+          </div>
+        </div>
+
+        <div class="install-pane__statusbar">
+          <span class="install-pane__status-badge">ATOMIC</span>
+          <span class="install-pane__status-hint">ready · claude</span>
+          <div class="install-pane__status-spacer"></div>
+          <span class="install-pane__status-pkg">@bastani/atomic</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer caption — lower right -->
+    <div class="cta-footer">
+      <p class="cta-footer__text">bun.sh required · MIT licensed</p>
+    </div>
+
+    <!-- Arc editorial marker — lower left -->
+    <div class="arc-marker">08 · start here</div>
+
+  </div>
+</body>
+</html>

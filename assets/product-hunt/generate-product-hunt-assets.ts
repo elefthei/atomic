@@ -34,6 +34,7 @@ const slides: SlideConfig[] = [
   { html: "05-architecture.html",         png: "05-architecture-diagram.png" },
   { html: "06-safety-devcontainer.html",  png: "06-safety-devcontainer.png" },
   { html: "07-workflow-skill-creator.html", png: "07-workflow-skill-creator.png" },
+  { html: "08-cta.html",                 png: "08-cta.png" },
 ];
 
 function verifySlideFiles(): void {
