@@ -166,10 +166,10 @@ describe("fonts.css declares required font families", () => {
 describe("placeholder slide HTML files exist and link shared CSS", () => {
   const slideFiles = [
     "01-hero.html",
-    "02-workflow-as-code.html",
-    "03-before-after.html",
-    "04-use-case-carousel.html",
-    "05-architecture.html",
+    "02-before-after.html",
+    "03-workflow-as-code.html",
+    "04-architecture-diagram.html",
+    "05-use-case-carousel.html",
     "06-safety-devcontainer.html",
     "07-workflow-skill-creator.html",
     "08-cta.html",
@@ -201,10 +201,10 @@ describe("placeholder slide HTML files exist and link shared CSS", () => {
 describe("PNG output files are present and correctly sized", () => {
   const pngFiles = [
     "01-hero-image.png",
-    "02-workflow-as-code.png",
-    "03-before-after.png",
-    "04-use-case-carousel.png",
-    "05-architecture-diagram.png",
+    "02-before-after.png",
+    "03-workflow-as-code.png",
+    "04-architecture-diagram.png",
+    "05-use-case-carousel.png",
     "06-safety-devcontainer.png",
     "07-workflow-skill-creator.png",
     "08-cta.png",

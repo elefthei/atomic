@@ -1,7 +1,7 @@
 /**
  * generate-product-hunt-assets.ts
  *
- * Renders all 7 Product Hunt slide HTMLs to 1270x760 PNG using Playwright/Chromium.
+ * Renders all 8 Product Hunt slide HTMLs to 1270x760 PNG using Playwright/Chromium.
  * Replaces the old SVG-only pipeline (generate-product-hunt-assets.ts + rasterize-product-hunt-assets.ts).
  *
  * Usage:
@@ -27,14 +27,14 @@ type SlideConfig = {
 };
 
 const slides: SlideConfig[] = [
-  { html: "01-hero.html",                 png: "01-hero-image.png" },
-  { html: "02-workflow-as-code.html",     png: "02-workflow-as-code.png" },
-  { html: "03-before-after.html",         png: "03-before-after.png" },
-  { html: "04-use-case-carousel.html",    png: "04-use-case-carousel.png" },
-  { html: "05-architecture.html",         png: "05-architecture-diagram.png" },
-  { html: "06-safety-devcontainer.html",  png: "06-safety-devcontainer.png" },
+  { html: "01-hero.html",                   png: "01-hero-image.png" },
+  { html: "02-before-after.html",           png: "02-before-after.png" },
+  { html: "03-workflow-as-code.html",       png: "03-workflow-as-code.png" },
+  { html: "04-architecture-diagram.html",   png: "04-architecture-diagram.png" },
+  { html: "05-use-case-carousel.html",      png: "05-use-case-carousel.png" },
+  { html: "06-safety-devcontainer.html",    png: "06-safety-devcontainer.png" },
   { html: "07-workflow-skill-creator.html", png: "07-workflow-skill-creator.png" },
-  { html: "08-cta.html",                 png: "08-cta.png" },
+  { html: "08-cta.html",                   png: "08-cta.png" },
 ];
 
 function verifySlideFiles(): void {
