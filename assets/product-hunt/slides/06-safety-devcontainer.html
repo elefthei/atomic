@@ -125,32 +125,58 @@
       gap: 0;
     }
 
-    /* Devcontainer right panel — strong cool-sapphire all-around border */
+    /* ============================================================
+       Devcontainer wrapper — single sapphire boundary (no duplicate chrome)
+       Holds the authentic Atomic TUI graph view inside.
+       ============================================================ */
     .dev-panel-outer {
-      border: 1.5px solid oklch(70% 0.20 215 / 0.80);   /* cool-sapphire, slightly thicker */
+      border: 1.5px solid oklch(70% 0.20 215 / 0.80);
       border-radius: 10px;
-      background: oklch(13% 0.04 220 / 0.50);
+      background: var(--mocha-base);
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      box-shadow: 0 0 0 1px oklch(70% 0.20 215 / 0.18), 0 16px 40px oklch(15% 0.05 220 / 0.45);
     }
 
+    /* Single header strip: states the boundary in one line, no inner banner duplicate */
     .dev-panel-header {
       display: flex;
       align-items: center;
-      height: 28px;
+      height: 24px;
       padding: 0 12px;
-      background-color: oklch(18% 0.08 215 / 0.80);
-      border-bottom: 1px solid oklch(70% 0.20 215 / 0.45);
+      background-color: oklch(20% 0.04 215 / 0.92);
+      border-bottom: 1px solid oklch(70% 0.20 215 / 0.14);
       gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
     }
 
-    .dev-panel-title {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
+    .dev-panel-header__lhs {
       color: var(--cool-sapphire);
+      font-weight: 700;
+    }
+
+    .dev-panel-header__sep {
+      color: var(--mocha-overlay0);
+    }
+
+    .dev-panel-header__detail {
+      color: var(--mocha-subtext0);
+    }
+
+    .dev-panel-header__guarantee {
+      margin-left: auto;
+      color: var(--mocha-overlay0);
       letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 9.5px;
+    }
+
+    .dev-panel-header__guarantee-icon {
+      color: var(--cool-sapphire);
+      margin-right: 4px;
     }
 
     .dev-panel-body {
@@ -160,81 +186,262 @@
       flex-direction: column;
     }
 
-    /* Scale the tui block inside the right panel */
-    .dev-panel-body .tui {
-      border: none;
-      border-radius: 0;
+    /* ============================================================
+       Authentic Atomic TUI — graph view (mirrors session-graph-panel.tsx)
+       Header (orchestrator badge + counts) | graph canvas | GRAPH statusbar
+       ============================================================ */
+    .atui {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--font-mono);
+      background-color: var(--mocha-base);
+      color: var(--mocha-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* --- Header bar (mirrors header.tsx) --- */
+    .atui__header {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      padding-right: 10px;
+    }
+
+    .atui__header-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__header-session {
+      margin-left: 9px;
+      color: var(--mocha-text);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .atui__header-session-dim {
+      color: var(--mocha-overlay1);
+    }
+
+    .atui__header-counts {
+      margin-left: auto;
+      display: flex;
+      flex-direction: row;
+      gap: 11px;
       font-size: 11px;
     }
 
-    .dev-panel-body .tui__header {
-      height: 20px;
+    .atui__count {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* --- Graph canvas --- */
+    .atui__canvas {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background-color: var(--mocha-base);
+      /* subtle vignette only — no decoration grids */
+    }
+
+    /* Tree connectors — pixel-positioned in the same coord system as nodes
+       so edges meet node borders cleanly. */
+    .atui__edge {
+      position: absolute;
+      background-color: var(--mocha-overlay0);
+      pointer-events: none;
+    }
+    .atui__edge--vertical { width: 1px; }
+    .atui__edge--horizontal { height: 1px; }
+
+    /* Active edges follow the running children (warm yellow, slightly soft) */
+    .atui__edge--active {
+      background-color: oklch(86% 0.13 90 / 0.65);
+    }
+
+    /* Node positioning layer */
+    .atui__nodes {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Single node card (mirrors node-card.tsx — rounded border + floating title) */
+    .atui__node {
+      position: absolute;
+      width: 158px;
+      height: 56px;
+      border-radius: 6px;
+      border: 1px solid var(--mocha-overlay0);
+      background-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translate(-50%, -50%);
       font-size: 11px;
     }
 
-    .dev-panel-body .tui__header-badge {
-      font-size: 10px;
+    .atui__node-title {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0 7px;
+      background-color: var(--mocha-base);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--mocha-subtext0);
+      white-space: nowrap;
+      letter-spacing: 0.01em;
     }
 
-    .dev-panel-body .tui__header-session {
-      font-size: 10px;
-    }
-
-    .dev-panel-body .tui__header-counts {
-      font-size: 10px;
-    }
-
-    .dev-panel-body .tui__sidebar {
-      width: 200px;
-    }
-
-    .dev-panel-body .tui__sidebar-header {
-      height: 20px;
-      font-size: 10px;
-    }
-
-    .dev-panel-body .tui__sidebar-header-badge {
-      font-size: 10px;
-    }
-
-    .dev-panel-body .tui__row {
-      height: 19px;
-      font-size: 10px;
-    }
-
-    .dev-panel-body .tui__section-label {
-      font-size: 10px;
-      padding: 5px 8px 1px;
-    }
-
-    .dev-panel-body .tui__statusbar {
-      height: 19px;
-      font-size: 10px;
-    }
-
-    .dev-panel-body .tui__statusbar-badge {
-      font-size: 10px;
-    }
-
-    .dev-panel-body .tui__output {
-      font-size: 10px;
-      padding: 8px 10px;
+    .atui__node-body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       gap: 1px;
-      line-height: 1.5;
+      line-height: 1.2;
     }
 
-    .dev-panel-body .tui__output-prefix {
-      font-size: 10px;
+    .atui__node-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
     }
 
-    .dev-panel-body .tui__banner {
-      font-size: 10px;
-      padding: 3px 10px;
+    .atui__node-duration {
+      font-size: 10.5px;
+      color: var(--mocha-overlay1);
     }
 
-    .dev-panel-body .tui__banner-detail {
-      font-size: 10px;
+    /* Status variants — match the real status-color mapping */
+    .atui__node--complete {
+      border-color: var(--mocha-green);
+    }
+    .atui__node--complete .atui__node-title {
+      color: var(--mocha-green);
+    }
+    .atui__node--complete .atui__node-status {
+      color: var(--mocha-green);
+    }
+
+    .atui__node--running {
+      border-color: var(--mocha-yellow);
+      background-color: oklch(35% 0.08 90 / 0.06);
+    }
+    .atui__node--running .atui__node-title {
+      color: var(--mocha-yellow);
+    }
+    .atui__node--running .atui__node-status {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__node--running.atui__node--focused {
+      border-color: oklch(82% 0.16 90);
+      background-color: oklch(35% 0.10 90 / 0.14);
+      box-shadow: 0 0 0 1px oklch(82% 0.16 90 / 0.45);
+    }
+
+    .atui__node--pending {
+      border-color: var(--mocha-overlay0);
+    }
+    .atui__node--pending .atui__node-title,
+    .atui__node--pending .atui__node-status {
+      color: var(--mocha-overlay0);
+    }
+
+    /* HIL — agent paused, waiting for human response (sapphire/blue) */
+    .atui__node--hil {
+      border-color: var(--mocha-blue);
+      background-color: oklch(60% 0.18 240 / 0.07);
+    }
+    .atui__node--hil .atui__node-title {
+      color: var(--mocha-blue);
+    }
+    .atui__node--hil .atui__node-status {
+      color: var(--mocha-blue);
+    }
+    .atui__node--hil .atui__node-duration {
+      color: oklch(72% 0.10 240 / 0.85);
+    }
+
+    /* Edge variant — blue to mark the HIL branch */
+    .atui__edge--hil {
+      background-color: oklch(75% 0.13 240 / 0.70);
+    }
+
+    /* --- Statusbar (mirrors statusline.tsx) --- */
+    .atui__statusbar {
+      display: flex;
+      align-items: center;
+      height: 22px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      font-size: 10.5px;
+      padding-right: 10px;
+    }
+
+    .atui__statusbar-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__statusbar-bg {
+      margin-left: 9px;
+      color: var(--mocha-overlay1);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .atui__statusbar-bg-icon {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__statusbar-hints {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .atui__hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .atui__hint + .atui__hint::before {
+      content: '·';
+      color: var(--mocha-overlay0);
+      padding: 0 6px;
+    }
+
+    .atui__hint-key {
+      color: var(--mocha-text);
+    }
+
+    .atui__hint-label {
+      color: var(--mocha-subtext0);
     }
   </style>
 </head>
@@ -310,13 +517,6 @@
             ">Host machine</span>
           </div>
 
-          <!-- Sub-labels -->
-          <div style="display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px;">
-            <div class="panel-sublabel" style="color: oklch(85% 0.06 25);">→ source of truth</div>
-            <div class="panel-sublabel" style="color: oklch(85% 0.06 25);">→ direct agent execution</div>
-            <div class="panel-sublabel" style="color: oklch(85% 0.06 25);">→ higher risk surface</div>
-          </div>
-
           <!-- TUI pane mock: Host machine — warm-tinted, simulating direct execution -->
           <div class="host-pane">
             <div class="host-pane__titlebar">
@@ -390,140 +590,128 @@
             ">Devcontainer boundary</span>
           </div>
 
-          <!-- Sub-labels -->
-          <div style="display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px;">
-            <div class="panel-sublabel" style="color: var(--cool-sapphire);">→ Atomic workflow <span style="color: var(--text-on-gradient-dim); text-transform: none; letter-spacing: 0;">(orchestration logic)</span></div>
-            <div class="panel-sublabel" style="color: var(--cool-teal);">→ Agent sessions</div>
-            <div class="panel-sublabel" style="color: var(--mocha-green);">→ lower blast radius</div>
-          </div>
-
-          <!-- Devcontainer boundary outer wrapper -->
+          <!-- Devcontainer boundary — single chrome strip wraps the authentic Atomic TUI -->
           <div class="dev-panel-outer" style="flex: 1; min-height: 0;">
             <div class="dev-panel-header">
-              <span class="dev-panel-title">devcontainer: ubuntu-22.04</span>
+              <span class="dev-panel-header__lhs">devcontainer: ubuntu-22.04</span>
+              <span class="dev-panel-header__sep">·</span>
+              <span class="dev-panel-header__detail">isolated · no network · ephemeral fs</span>
+              <span class="dev-panel-header__guarantee">
+                <span class="dev-panel-header__guarantee-icon">●</span>host fs untouched
+              </span>
             </div>
+
             <div class="dev-panel-body">
-              <!-- tui-state-devcontainer innerHTML (scaled down) -->
-              <div class="tui" style="flex: 1; border: none; border-radius: 0;">
+              <!-- ============================================================
+                   Authentic Atomic TUI — session graph view
+                   Mirrors src/sdk/components/header.tsx,
+                          src/sdk/components/session-graph-panel.tsx,
+                          src/sdk/components/node-card.tsx,
+                          src/sdk/components/statusline.tsx
+                   ============================================================ -->
+              <div class="atui">
 
-                <!-- Header bar -->
-                <div class="tui__header">
-                  <div class="tui__header-badge tui__header-badge--graph">GRAPH</div>
-                  <span class="tui__header-session">prod-alert-investigate · opencode</span>
-                  <div class="tui__header-counts">
-                    <span class="tui__count"><span class="tui-green">✓</span><span class="tui-dim"> 1</span></span>
-                    <span class="tui__count"><span class="tui-yellow">●</span><span class="tui-dim"> 2</span></span>
-                    <span class="tui__count"><span class="tui-dim">○</span><span class="tui-dim"> 1</span></span>
+                <!-- Header: Orchestrator (running) badge · session · 5 status counters -->
+                <div class="atui__header">
+                  <div class="atui__header-badge"> Orchestrator </div>
+                  <span class="atui__header-session">
+                    prod-alert-investigate
+                    <span class="atui__header-session-dim"> · opencode</span>
+                  </span>
+                  <div class="atui__header-counts">
+                    <span class="atui__count"><span style="color: var(--mocha-green);">✓</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-yellow);">●</span><span style="color: var(--mocha-overlay1);">2</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-blue);">?</span><span style="color: var(--mocha-overlay1);">1</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-overlay0);">○</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-red);">✗</span><span style="color: var(--mocha-overlay1);">0</span></span>
                   </div>
                 </div>
 
-                <!-- Body -->
-                <div class="tui__body">
+                <!-- Graph canvas: orchestrator → 2 children, connected by tree edges.
+                     Edges and nodes share the same pixel coordinate system, so lines
+                     meet node borders cleanly. -->
+                <div class="atui__canvas">
 
-                  <!-- Sidebar -->
-                  <div class="tui__sidebar">
-                    <div class="tui__sidebar-header">
-                      <div class="tui__sidebar-header-badge tui__sidebar-header-badge--opencode">OPENCODE</div>
-                      <span class="tui__sidebar-header-label">workflow › running</span>
+                  <!-- Tree connectors. Geometry:
+                       Orchestrator center: (50%, 96px), height 56 → bottom edge at 124px
+                       Bus row: y = 174px (50px trunk)
+                       Children center: (30% / 70%, 252px), height 56 → top edge at 224px (50px drop) -->
+
+                  <!-- Trunk: orchestrator bottom → bus -->
+                  <div class="atui__edge atui__edge--vertical atui__edge--active"
+                       style="left: calc(50% - 0.5px); top: 124px; height: 50px;"></div>
+
+                  <!-- Horizontal bus -->
+                  <div class="atui__edge atui__edge--horizontal"
+                       style="left: 30%; top: 174px; width: 40%;"></div>
+
+                  <!-- Drop to log-analyst (active branch) -->
+                  <div class="atui__edge atui__edge--vertical atui__edge--active"
+                       style="left: calc(30% - 0.5px); top: 174px; height: 50px;"></div>
+
+                  <!-- Drop to metric-collector (HIL — paused, awaiting human input) -->
+                  <div class="atui__edge atui__edge--vertical atui__edge--hil"
+                       style="left: calc(70% - 0.5px); top: 174px; height: 50px;"></div>
+
+                  <!-- Node layer -->
+                  <div class="atui__nodes">
+
+                    <!-- Orchestrator: running (waiting on children) -->
+                    <div class="atui__node atui__node--running"
+                         style="left: 50%; top: 96px;">
+                      <span class="atui__node-title">orchestrator</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">⠿ running</span>
+                        <span class="atui__node-duration">1:38</span>
+                      </div>
                     </div>
 
-                    <div class="tui__workflow-list">
-                      <div class="tui__section-label">
-                        <span class="tui__section-label-bar">▎</span>
-                        <span class="tui__section-label-text">sessions</span>
-                      </div>
-
-                      <div class="tui__row">
-                        <span class="tui-green" style="font-size:10px;">✓</span>
-                        <span class="tui__row-name tui-green">orchestrator</span>
-                      </div>
-                      <div class="tui__row tui__row--focused">
-                        <span class="tui__spinner">⠸</span>
-                        <span class="tui__row-name tui-yellow">log-analyst</span>
-                      </div>
-                      <div class="tui__row">
-                        <span class="tui__spinner tui-dim">⠼</span>
-                        <span class="tui__row-name tui-yellow">metric-collector</span>
-                      </div>
-                      <div class="tui__row">
-                        <span class="tui-dim" style="font-size:10px;">○</span>
-                        <span class="tui__row-name tui-dim">report-writer</span>
-                      </div>
-
-                      <div class="tui__section-label" style="margin-top:5px;">
-                        <span class="tui__section-label-bar">▎</span>
-                        <span class="tui__section-label-text">environment</span>
-                      </div>
-                      <div class="tui__row">
-                        <span class="tui-sapphire" style="font-size:10px;">●</span>
-                        <span class="tui__row-name tui-sapphire">devcontainer</span>
-                      </div>
-                      <div class="tui__row">
-                        <span class="tui-dim" style="font-size:10px;"> </span>
-                        <span class="tui__row-name tui-dim">ubuntu-22.04 · isolated</span>
-                      </div>
-                      <div class="tui__row">
-                        <span class="tui-dim" style="font-size:10px;"> </span>
-                        <span class="tui__row-name tui-dim">no network · no host fs</span>
+                    <!-- log-analyst: running, focused (left child) -->
+                    <div class="atui__node atui__node--running atui__node--focused"
+                         style="left: 30%; top: 252px;">
+                      <span class="atui__node-title">log-analyst</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">⠸ running</span>
+                        <span class="atui__node-duration">1:24</span>
                       </div>
                     </div>
+
+                    <!-- metric-collector: HIL — paused, waiting for human response -->
+                    <div class="atui__node atui__node--hil"
+                         style="left: 70%; top: 252px;">
+                      <span class="atui__node-title">metric-collector</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">? waiting for response</span>
+                        <span class="atui__node-duration">0:51</span>
+                      </div>
+                    </div>
+
                   </div>
-
-                  <!-- Main pane: devcontainer banner + output -->
-                  <div class="tui__main">
-
-                    <!-- Devcontainer isolation banner -->
-                    <div class="tui__banner tui__banner--devcontainer">
-                      <span class="tui__banner-label">devcontainer: ubuntu-22.04</span>
-                      <span class="tui-dim">·</span>
-                      <span class="tui__banner-detail">isolated · no network · ephemeral fs</span>
-                      <span class="tui-dim" style="margin-left:auto;font-size:10px;">ctrl+b d detach</span>
-                    </div>
-
-                    <!-- Agent output inside container -->
-                    <div class="tui__output">
-                      <div class="tui__output-line">
-                        <span class="tui__output-prefix">log-analyst</span>
-                        <span class="tui__output-text tui-muted">Pulling log snapshot from /var/log/atomic/executor.log…</span>
-                      </div>
-                      <div class="tui__output-line">
-                        <span class="tui__output-prefix">log-analyst</span>
-                        <span class="tui__output-text"><span class="tui-yellow">WARN</span> <span class="tui-muted">High p95 latency: 4.2s (threshold: 2.0s)</span></span>
-                      </div>
-                      <div class="tui__output-line">
-                        <span class="tui__output-prefix">log-analyst</span>
-                        <span class="tui__output-text tui-muted">Checking correlated error rate at 14:22 UTC…</span>
-                      </div>
-                      <div class="tui__output-line">
-                        <span class="tui__output-prefix">log-analyst</span>
-                        <span class="tui__output-text"><span class="tui-red">ERROR</span> <span class="tui-muted">503 spike: 47 errors in 3m window → executor restart</span></span>
-                      </div>
-                      <div class="tui__output-line">
-                        <span class="tui__output-prefix">metric-collector</span>
-                        <span class="tui__output-text"><span class="tui__spinner">⠸</span> <span class="tui-muted">Querying Prometheus: cpu, mem, rps…</span></span>
-                      </div>
-                      <div class="tui__output-line">
-                        <span class="tui__output-prefix tui-dim">container</span>
-                        <span class="tui__output-text tui-dim">All writes isolated to ephemeral /workspace — host fs untouched</span>
-                      </div>
-                    </div>
-                  </div>
-
                 </div>
 
-                <!-- Statusbar -->
-                <div class="tui__statusbar">
-                  <div class="tui__statusbar-badge tui__statusbar-badge--opencode">OPENCODE</div>
-                  <span class="tui__statusbar-info tui-yellow">⠸ log-analyst</span>
-                  <div class="tui__statusbar-spacer"></div>
-                  <div class="tui__statusbar-hints">
-                    <span class="tui__hint">
-                      <span class="tui__hint-key">ctrl+g</span>
-                      <span class="tui__hint-label">graph</span>
+                <!-- Statusbar: GRAPH badge + nav hints (mirrors statusline.tsx) -->
+                <div class="atui__statusbar">
+                  <div class="atui__statusbar-badge">GRAPH</div>
+                  <span class="atui__statusbar-bg">
+                    <span class="atui__statusbar-bg-icon">◆</span>
+                    <span>2 background</span>
+                  </span>
+                  <div class="atui__statusbar-hints">
+                    <span class="atui__hint">
+                      <span class="atui__hint-key" style="letter-spacing: 0.12em;">↑↓←→</span>
+                      <span class="atui__hint-label">navigate</span>
                     </span>
-                    <span class="tui__hint">
-                      <span class="tui__hint-key">ctrl+b d</span>
-                      <span class="tui__hint-label">detach</span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">↵</span>
+                      <span class="atui__hint-label">attach</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">/</span>
+                      <span class="atui__hint-label">stages</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">ctrl+b d</span>
+                      <span class="atui__hint-label">detach</span>
                     </span>
                   </div>
                 </div>

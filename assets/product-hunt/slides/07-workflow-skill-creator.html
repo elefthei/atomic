@@ -339,67 +339,297 @@
     .tk-txt  { color: var(--mocha-text); }
 
     /* ------------------------------------------------------------------
-       RIGHT: TUI graph wrapper — cool-anchored
+       RIGHT: Devcontainer-style wrapper holding the authentic Atomic TUI
+       (mirrors slide 06's dev-panel-outer + atui graph view)
        ------------------------------------------------------------------ */
-    .tui-wrap {
+    .dev-panel-outer {
       border: 1.5px solid oklch(70% 0.20 215 / 0.80);
       border-radius: 10px;
-      background: oklch(13% 0.04 220 / 0.50);
+      background: var(--mocha-base);
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      flex: 1;
+      box-shadow: 0 0 0 1px oklch(70% 0.20 215 / 0.18), 0 16px 40px oklch(15% 0.05 220 / 0.45);
     }
 
-    .tui-wrap__header {
+    .dev-panel-header {
       display: flex;
       align-items: center;
-      height: 26px;
+      height: 24px;
       padding: 0 12px;
-      background-color: oklch(18% 0.08 215 / 0.80);
-      border-bottom: 1px solid oklch(70% 0.20 215 / 0.45);
+      background-color: oklch(20% 0.04 215 / 0.92);
+      border-bottom: 1px solid oklch(70% 0.20 215 / 0.14);
       gap: 8px;
-    }
-
-    .tui-wrap__title {
       font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--cool-sapphire);
-      letter-spacing: 0.06em;
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
     }
 
-    .tui-wrap__body {
+    .dev-panel-header__lhs {
+      color: var(--cool-sapphire);
+      font-weight: 700;
+    }
+
+    .dev-panel-header__sep {
+      color: var(--mocha-overlay0);
+    }
+
+    .dev-panel-header__detail {
+      color: var(--mocha-subtext0);
+    }
+
+    .dev-panel-header__guarantee {
+      margin-left: auto;
+      color: var(--mocha-overlay0);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 9.5px;
+    }
+
+    .dev-panel-header__guarantee-icon {
+      color: var(--mocha-yellow);
+      margin-right: 4px;
+    }
+
+    .dev-panel-body {
       flex: 1;
       overflow: hidden;
       display: flex;
       flex-direction: column;
     }
 
-    /* Scale-down rules so the embedded tui block fits the right column */
-    .tui-wrap .tui {
-      border: none;
-      border-radius: 0;
+    /* Authentic Atomic TUI — graph view */
+    .atui {
       flex: 1;
-      font-size: 10.5px;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--font-mono);
+      background-color: var(--mocha-base);
+      color: var(--mocha-text);
+      font-variant-numeric: tabular-nums;
     }
 
-    .tui-wrap .tui__header { height: 20px; font-size: 10.5px; }
-    .tui-wrap .tui__header-badge { font-size: 9.5px; }
-    .tui-wrap .tui__header-session { font-size: 10px; }
-    .tui-wrap .tui__header-counts { font-size: 10px; }
-    .tui-wrap .tui__sidebar { width: 132px; }
-    .tui-wrap .tui__sidebar-header { height: 20px; font-size: 9.5px; }
-    .tui-wrap .tui__sidebar-header-badge { font-size: 9.5px; }
-    .tui-wrap .tui__row { height: 18px; font-size: 9.5px; }
-    .tui-wrap .tui__section-label { font-size: 9.5px; padding: 5px 8px 1px; }
-    .tui-wrap .tui__statusbar { height: 19px; font-size: 9.5px; }
-    .tui-wrap .tui__statusbar-badge { font-size: 9.5px; }
-    .tui-wrap .tui__node { width: 92px; font-size: 9.5px; }
-    .tui-wrap .tui__node-title { font-size: 10px; }
-    .tui-wrap .tui__node-duration { font-size: 9px; }
-    .tui-wrap .tui__node-hint { font-size: 9px; }
-    .tui-wrap .tui__graph { gap: 4px; padding: 12px 10px; }
+    .atui__header {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      padding-right: 10px;
+    }
+
+    .atui__header-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__header-session {
+      margin-left: 9px;
+      color: var(--mocha-text);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .atui__header-session-dim {
+      color: var(--mocha-overlay1);
+    }
+
+    .atui__header-counts {
+      margin-left: auto;
+      display: flex;
+      flex-direction: row;
+      gap: 11px;
+      font-size: 11px;
+    }
+
+    .atui__count {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .atui__canvas {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background-color: var(--mocha-base);
+    }
+
+    .atui__edge {
+      position: absolute;
+      background-color: var(--mocha-overlay0);
+      pointer-events: none;
+    }
+    .atui__edge--vertical { width: 1px; }
+    .atui__edge--horizontal { height: 1px; }
+
+    .atui__edge--active {
+      background-color: oklch(86% 0.13 90 / 0.65);
+    }
+
+    .atui__nodes {
+      position: absolute;
+      inset: 0;
+    }
+
+    .atui__node {
+      position: absolute;
+      width: 158px;
+      height: 56px;
+      border-radius: 6px;
+      border: 1px solid var(--mocha-overlay0);
+      background-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translate(-50%, -50%);
+      font-size: 11px;
+    }
+
+    .atui__node-title {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0 7px;
+      background-color: var(--mocha-base);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--mocha-subtext0);
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+
+    .atui__node-body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      line-height: 1.2;
+    }
+
+    .atui__node-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .atui__node-duration {
+      font-size: 10.5px;
+      color: var(--mocha-overlay1);
+    }
+
+    .atui__node--complete {
+      border-color: var(--mocha-green);
+    }
+    .atui__node--complete .atui__node-title,
+    .atui__node--complete .atui__node-status {
+      color: var(--mocha-green);
+    }
+
+    .atui__node--running {
+      border-color: var(--mocha-yellow);
+      background-color: oklch(35% 0.08 90 / 0.06);
+    }
+    .atui__node--running .atui__node-title,
+    .atui__node--running .atui__node-status {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__node--running.atui__node--focused {
+      border-color: oklch(82% 0.16 90);
+      background-color: oklch(35% 0.10 90 / 0.14);
+      box-shadow: 0 0 0 1px oklch(82% 0.16 90 / 0.45);
+    }
+
+    .atui__node--pending {
+      border-color: var(--mocha-overlay0);
+    }
+    .atui__node--pending .atui__node-title,
+    .atui__node--pending .atui__node-status {
+      color: var(--mocha-overlay0);
+    }
+
+    .atui__statusbar {
+      display: flex;
+      align-items: center;
+      height: 22px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      font-size: 10.5px;
+      padding-right: 10px;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .atui__statusbar > * {
+      flex-shrink: 0;
+    }
+
+    .atui__statusbar-bg,
+    .atui__hint {
+      white-space: nowrap;
+    }
+
+    .atui__statusbar-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__statusbar-bg {
+      margin-left: 9px;
+      color: var(--mocha-overlay1);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .atui__statusbar-bg-icon {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__statusbar-hints {
+      margin-left: auto;
+      padding-left: 18px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .atui__hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .atui__hint + .atui__hint::before {
+      content: '·';
+      color: var(--mocha-overlay0);
+      padding: 0 6px;
+    }
+
+    .atui__hint-key {
+      color: var(--mocha-text);
+    }
+
+    .atui__hint-label {
+      color: var(--mocha-subtext0);
+    }
 
   </style>
 </head>
@@ -488,7 +718,7 @@
 
                 <div class="chat-success" style="margin-top:6px;">
                   <span style="color:var(--mocha-green);">✓</span>
-                  <span>created <span class="chat-success__path">src/workflows/release-notes/claude.ts</span></span>
+                  <span>created <span class="chat-success__path">src/workflows/release-notes/claude/index.ts</span></span>
                 </div>
               </div>
 
@@ -520,7 +750,7 @@
               <div class="code-pane__tabbar">
                 <div class="code-pane__tab">
                   <div class="code-pane__tab-dot"></div>
-                  release-notes/claude.ts
+                  release-notes/claude/index.ts
                 </div>
                 <div class="code-pane__tab-spacer"></div>
                 <div class="code-pane__lights">
@@ -546,127 +776,110 @@
         </div>
 
         <!-- ============================================================
-             PANEL 3 — RUNNING TUI
+             PANEL 3 — RUNNING TUI (devcontainer-style wrapper + atui graph,
+             matching slide 06's component design)
              ============================================================ -->
         <div style="flex: 0 0 322px; display: flex; flex-direction: column; gap: 6px; min-width: 0;">
           <div class="col-header" style="color: var(--cool-sapphire); margin-bottom: 6px;">Run</div>
 
-          <div class="tui-wrap">
-            <div class="tui-wrap__header">
-              <span class="tui-wrap__title">$ atomic workflow</span>
+          <div class="dev-panel-outer" style="flex: 1; min-height: 0;">
+            <div class="dev-panel-header">
+              <span class="dev-panel-header__lhs">release-notes</span>
+              <span class="dev-panel-header__sep">·</span>
+              <span class="dev-panel-header__detail">claude · 3 stages</span>
+              <span class="dev-panel-header__guarantee">
+                <span class="dev-panel-header__guarantee-icon">●</span>running
+              </span>
             </div>
-            <div class="tui-wrap__body">
-              <div class="tui">
 
-                <!-- TUI Header -->
-                <div class="tui__header">
-                  <div class="tui__header-badge tui__header-badge--graph">GRAPH</div>
-                  <span class="tui__header-session">release-notes · claude</span>
-                  <div class="tui__header-counts">
-                    <span class="tui__count"><span class="tui-green">✓</span><span class="tui-dim"> 1</span></span>
-                    <span class="tui__count"><span class="tui-yellow">●</span><span class="tui-dim"> 2</span></span>
-                    <span class="tui__count"><span class="tui-dim">○</span><span class="tui-dim"> 0</span></span>
+            <div class="dev-panel-body">
+              <!-- Authentic Atomic TUI — session graph view -->
+              <div class="atui">
+
+                <!-- Header: Workflow badge · session · status counters -->
+                <div class="atui__header">
+                  <div class="atui__header-badge"> Workflow </div>
+                  <span class="atui__header-session">
+                    release-notes
+                    <span class="atui__header-session-dim"> · claude</span>
+                  </span>
+                  <div class="atui__header-counts">
+                    <span class="atui__count"><span style="color: var(--mocha-green);">✓</span><span style="color: var(--mocha-overlay1);">1</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-yellow);">●</span><span style="color: var(--mocha-overlay1);">1</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-overlay0);">○</span><span style="color: var(--mocha-overlay1);">1</span></span>
                   </div>
                 </div>
 
-                <!-- TUI Body -->
-                <div class="tui__body">
-                  <!-- Sidebar -->
-                  <div class="tui__sidebar">
-                    <div class="tui__sidebar-header">
-                      <div class="tui__sidebar-header-badge tui__sidebar-header-badge--claude">CLAUDE</div>
-                      <span class="tui__sidebar-header-label">running</span>
+                <!-- Graph canvas: 3-stage chain (collect-prs → draft → tone-review).
+                     Geometry:
+                       collect-prs  center: (50%,  80px), spans 52..108
+                       draft        center: (50%, 240px), spans 212..268
+                       tone-review  center: (50%, 400px), spans 372..428
+                     Edges drawn between node borders so lines meet cleanly. -->
+                <div class="atui__canvas">
+
+                  <!-- Edge 1: collect-prs → draft (active branch) -->
+                  <div class="atui__edge atui__edge--vertical atui__edge--active"
+                       style="left: calc(50% - 0.5px); top: 108px; height: 104px;"></div>
+
+                  <!-- Edge 2: draft → tone-review (pending branch) -->
+                  <div class="atui__edge atui__edge--vertical"
+                       style="left: calc(50% - 0.5px); top: 268px; height: 104px;"></div>
+
+                  <div class="atui__nodes">
+
+                    <!-- collect-prs: complete -->
+                    <div class="atui__node atui__node--complete"
+                         style="left: 50%; top: 80px;">
+                      <span class="atui__node-title">collect-prs</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">✓ done</span>
+                        <span class="atui__node-duration">0:06</span>
+                      </div>
                     </div>
 
-                    <div class="tui__workflow-list">
-                      <div class="tui__section-label">
-                        <span class="tui__section-label-bar">▎</span>
-                        <span class="tui__section-label-text">stages</span>
-                      </div>
-
-                      <div class="tui__row">
-                        <span class="tui-green" style="font-size:9.5px;">✓</span>
-                        <span class="tui__row-name tui-green">collect-prs</span>
-                      </div>
-                      <div class="tui__row tui__row--focused">
-                        <span class="tui__spinner">⠹</span>
-                        <span class="tui__row-name tui-yellow">draft</span>
-                      </div>
-                      <div class="tui__row">
-                        <span class="tui__spinner tui-dim">⠼</span>
-                        <span class="tui__row-name tui-yellow">tone-review</span>
-                      </div>
-
-                      <div class="tui__section-label" style="margin-top:5px;">
-                        <span class="tui__section-label-bar">▎</span>
-                        <span class="tui__section-label-text">inputs</span>
-                      </div>
-                      <div class="tui__row">
-                        <span class="tui-dim" style="font-size:9.5px;"> </span>
-                        <span class="tui__row-name tui-dim">since=7d</span>
+                    <!-- draft: running, focused -->
+                    <div class="atui__node atui__node--running atui__node--focused"
+                         style="left: 50%; top: 240px;">
+                      <span class="atui__node-title">draft</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">⠹ running</span>
+                        <span class="atui__node-duration">0:42</span>
                       </div>
                     </div>
-                  </div>
 
-                  <!-- Main: graph -->
-                  <div class="tui__main">
-                    <div class="tui__graph" style="flex-direction:column;">
-
-                      <!-- collect-prs (done) -->
-                      <div style="display:flex;justify-content:center;">
-                        <div class="tui__node tui__node--done">
-                          <div class="tui__node-title">collect-prs</div>
-                          <div class="tui__node-duration tui__node-duration--done">0:06</div>
-                        </div>
+                    <!-- tone-review: pending (waiting on draft) -->
+                    <div class="atui__node atui__node--pending"
+                         style="left: 50%; top: 400px;">
+                      <span class="atui__node-title">tone-review</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">○ pending</span>
+                        <span class="atui__node-duration">—</span>
                       </div>
-
-                      <div style="display:flex;justify-content:center;height:10px;">
-                        <div style="width:1px;background:var(--mocha-overlay0);height:100%;"></div>
-                      </div>
-
-                      <!-- draft (running, focused) -->
-                      <div style="display:flex;justify-content:center;">
-                        <div class="tui__node tui__node--running tui__node--focused">
-                          <div class="tui__node-title">draft</div>
-                          <div class="tui__node-duration tui__node-duration--running">
-                            <span class="tui__spinner">⠹</span> 0:42
-                          </div>
-                          <div class="tui__node-hint tui-dim">writing notes</div>
-                        </div>
-                      </div>
-
-                      <div style="display:flex;justify-content:center;height:10px;">
-                        <div style="width:1px;background:var(--mocha-overlay0);height:100%;"></div>
-                      </div>
-
-                      <!-- tone-review (running) -->
-                      <div style="display:flex;justify-content:center;">
-                        <div class="tui__node tui__node--running">
-                          <div class="tui__node-title">tone-review</div>
-                          <div class="tui__node-duration tui__node-duration--running">
-                            <span class="tui__spinner tui-dim">⠼</span> 0:11
-                          </div>
-                          <div class="tui__node-hint tui-dim">awaiting draft</div>
-                        </div>
-                      </div>
-
                     </div>
+
                   </div>
                 </div>
 
-                <!-- Statusbar -->
-                <div class="tui__statusbar">
-                  <div class="tui__statusbar-badge tui__statusbar-badge--claude">CLAUDE</div>
-                  <span class="tui__statusbar-info tui-yellow">⠹ draft</span>
-                  <div class="tui__statusbar-spacer"></div>
-                  <div class="tui__statusbar-hints">
-                    <span class="tui__hint">
-                      <span class="tui__hint-key">↵</span>
-                      <span class="tui__hint-label">attach</span>
+                <!-- Statusbar: GRAPH badge + nav hints -->
+                <div class="atui__statusbar">
+                  <div class="atui__statusbar-badge">GRAPH</div>
+                  <span class="atui__statusbar-bg">
+                    <span class="atui__statusbar-bg-icon">◆</span>
+                    <span>1 running</span>
+                  </span>
+                  <div class="atui__statusbar-hints">
+                    <span class="atui__hint">
+                      <span class="atui__hint-key" style="letter-spacing: 0.12em;">↑↓</span>
+                      <span class="atui__hint-label">navigate</span>
                     </span>
-                    <span class="tui__hint">
-                      <span class="tui__hint-key">q</span>
-                      <span class="tui__hint-label">quit</span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">↵</span>
+                      <span class="atui__hint-label">attach</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">/</span>
+                      <span class="atui__hint-label">stages</span>
                     </span>
                   </div>
                 </div>

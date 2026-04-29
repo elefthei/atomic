@@ -122,21 +122,111 @@
       font-size: 10.5px;
     }
 
-    /* Workflow.ts code pane — keyword highlighting */
-    .code-line {
+    /* Observability pane — live attach to one agent during a stage.
+       Mirrors src/sdk/components/{status-helpers,attached-statusline}.tsx */
+    .obs-stream {
       font-family: var(--font-mono);
       font-size: 11.5px;
-      line-height: 1.55;
-      white-space: pre;
+      line-height: 1.5;
       color: var(--mocha-text);
+      padding: 12px 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
     }
-    .code-kw      { color: var(--mocha-mauve); }
-    .code-fn      { color: var(--cool-blue); }
-    .code-str     { color: var(--mocha-green); }
-    .code-prop    { color: var(--cool-teal); }
-    .code-arg     { color: var(--mocha-text); }
-    .code-comment { color: var(--mocha-overlay0); font-style: italic; }
-    .code-punct   { color: var(--mocha-subtext0); }
+    .obs-stream__line { display: flex; gap: 8px; align-items: baseline; }
+    .obs-stream__text {
+      color: var(--mocha-subtext0);
+      font-style: italic;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .obs-stream__glyph {
+      color: var(--mocha-mauve);
+      font-size: 9px;
+      width: 10px;
+      flex-shrink: 0;
+    }
+    .obs-stream__tool-name { color: var(--cool-blue); font-weight: 600; }
+    .obs-stream__tool-arg  { color: var(--mocha-subtext0); }
+
+    .obs-stream__result {
+      color: var(--mocha-subtext0);
+      padding-left: 6px;
+      font-size: 11px;
+    }
+    .obs-stream__result-glyph {
+      color: var(--mocha-overlay1);
+      width: 10px;
+      flex-shrink: 0;
+    }
+    .obs-stream__result--ok   { color: var(--mocha-green); }
+    .obs-stream__result--warn { color: var(--mocha-yellow); }
+
+    /* Stage strip: real status glyphs (✓ ● ○) at the bottom of the pane */
+    .obs-stages {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background-color: var(--mocha-base);
+      border-top: 1px solid var(--mocha-overlay0);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+    .obs-stages__item { display: inline-flex; align-items: center; gap: 5px; }
+    .obs-stages__icon { font-size: 11px; line-height: 1; }
+    .obs-stages__icon--complete { color: var(--mocha-green); }
+    .obs-stages__icon--running  { color: var(--mocha-yellow); }
+    .obs-stages__icon--pending  { color: var(--mocha-overlay0); }
+    .obs-stages__label { color: var(--mocha-subtext0); }
+    .obs-stages__label--active { color: var(--mocha-text); font-weight: 600; }
+    .obs-stages__sep { color: var(--mocha-overlay0); }
+
+    /* AttachedStatusline: matches src/sdk/components/attached-statusline.tsx
+       (claude → warning/yellow pill; right side: name · ctrl+b d detach) */
+    .obs-statusline {
+      display: flex;
+      align-items: stretch;
+      height: 22px;
+      background-color: var(--mocha-surface0);
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+    .obs-statusline__pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+    .obs-statusline__pill--claude {
+      background-color: var(--mocha-yellow);
+      color: var(--mocha-base);
+    }
+    .obs-statusline__spacer { flex-grow: 1; }
+    .obs-statusline__hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding-right: 12px;
+    }
+    .obs-statusline__name   { color: var(--mocha-overlay1); }
+    .obs-statusline__sep    { color: var(--mocha-overlay0); }
+    .obs-statusline__key    { color: var(--mocha-text); font-weight: 600; }
+    .obs-statusline__action { color: var(--mocha-subtext0); }
+
+    /* Caption above the obs pane — explains the attach affordance */
+    .obs-caption {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--text-on-gradient-dim);
+      letter-spacing: 0.01em;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      max-width: 520px;
+    }
 
     /* Outcome receipt card */
     .outcome {
@@ -371,7 +461,7 @@
 
             <div class="prompt-log__turn">
               <div class="prompt-log__user">
-                <span>$</span><span class="prompt-log__agent-tag">copilot</span>
+                <span>$</span><span class="prompt-log__agent-tag">claude</span>
                 <span class="prompt-log__user-prompt">"now run the tests"</span>
               </div>
               <div class="prompt-log__reply">
@@ -436,10 +526,16 @@
           >After</span>
         </h2>
 
-        <!-- workflow.ts source file → completed run receipt -->
+        <!-- live attached agent stream → completed run receipt -->
         <div style="display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 2; max-width: 520px;">
 
-          <!-- Tiny workflow.ts file — abbreviated, faithful to the real API -->
+          <!-- Caption: the attach affordance, framed as opt-in observability -->
+          <p class="obs-caption">
+            Run hands-off — or attach into any stage to watch the agent live.
+          </p>
+
+          <!-- Observability TUI pane: live attach to claude during the test stage.
+               Stage strip + AttachedStatusline at the bottom mirror the real Atomic UX. -->
           <div class="tui-pane" style="background: var(--mocha-mantle);">
             <div class="tui-pane__titlebar">
               <div class="tui-pane__traffic-lights">
@@ -447,20 +543,84 @@
                 <div class="tui-pane__dot tui-pane__dot--min"></div>
                 <div class="tui-pane__dot tui-pane__dot--max"></div>
               </div>
-              <div class="tui-pane__title">workflow.ts &nbsp;·&nbsp; abbreviated</div>
+              <div class="tui-pane__title">~/ship-fix &nbsp;·&nbsp; attached → test stage</div>
             </div>
-            <div class="tui-pane__body" style="padding: 10px 16px; white-space: normal;">
-              <div class="code-line"><span class="code-kw">const</span> <span class="code-arg">step</span> <span class="code-punct">=</span> <span class="code-punct">(</span><span class="code-arg">cmd</span><span class="code-punct">) =&gt;</span> <span class="code-kw">async</span> <span class="code-punct">(</span><span class="code-arg">s</span><span class="code-punct">) =&gt;</span> <span class="code-arg">s</span><span class="code-punct">.</span><span class="code-prop">session</span><span class="code-punct">.</span><span class="code-prop">query</span><span class="code-punct">(</span><span class="code-arg">cmd</span><span class="code-punct">)</span></div>
-              <div class="code-line">&nbsp;</div>
-              <div class="code-line"><span class="code-fn">defineWorkflow</span><span class="code-punct">({</span> <span class="code-prop">name</span><span class="code-punct">:</span> <span class="code-str">"ship"</span> <span class="code-punct">})</span></div>
-              <div class="code-line">  <span class="code-punct">.</span><span class="code-prop">for</span><span class="code-punct">(</span><span class="code-str">"claude"</span><span class="code-punct">)</span></div>
-              <div class="code-line">  <span class="code-punct">.</span><span class="code-prop">run</span><span class="code-punct">(</span><span class="code-kw">async</span> <span class="code-punct">(</span><span class="code-arg">ctx</span><span class="code-punct">) =&gt; {</span></div>
-              <div class="code-line">    <span class="code-kw">await</span> <span class="code-arg">ctx</span><span class="code-punct">.</span><span class="code-prop">stage</span><span class="code-punct">({</span> <span class="code-prop">name</span><span class="code-punct">:</span> <span class="code-str">"scan"</span>   <span class="code-punct">},</span> <span class="code-punct">{}, {},</span> <span class="code-fn">step</span><span class="code-punct">(</span><span class="code-str">"/security-review"</span><span class="code-punct">))</span></div>
-              <div class="code-line">    <span class="code-kw">await</span> <span class="code-arg">ctx</span><span class="code-punct">.</span><span class="code-prop">stage</span><span class="code-punct">({</span> <span class="code-prop">name</span><span class="code-punct">:</span> <span class="code-str">"test"</span>   <span class="code-punct">},</span> <span class="code-punct">{}, {},</span> <span class="code-fn">step</span><span class="code-punct">(</span><span class="code-str">"bun test"</span><span class="code-punct">))</span></div>
-              <div class="code-line">    <span class="code-kw">await</span> <span class="code-arg">ctx</span><span class="code-punct">.</span><span class="code-prop">stage</span><span class="code-punct">({</span> <span class="code-prop">name</span><span class="code-punct">:</span> <span class="code-str">"lint"</span>   <span class="code-punct">},</span> <span class="code-punct">{}, {},</span> <span class="code-fn">step</span><span class="code-punct">(</span><span class="code-str">"/lint-fix"</span><span class="code-punct">))</span></div>
-              <div class="code-line">    <span class="code-kw">await</span> <span class="code-arg">ctx</span><span class="code-punct">.</span><span class="code-prop">stage</span><span class="code-punct">({</span> <span class="code-prop">name</span><span class="code-punct">:</span> <span class="code-str">"review"</span> <span class="code-punct">},</span> <span class="code-punct">{}, {},</span> <span class="code-fn">step</span><span class="code-punct">(</span><span class="code-str">"/pr-summary"</span><span class="code-punct">))</span></div>
-              <div class="code-line">  <span class="code-punct">})</span></div>
-              <div class="code-line">  <span class="code-punct">.</span><span class="code-prop">compile</span><span class="code-punct">()</span></div>
+
+            <!-- Live agent stream: tool calls + brief reasoning, Claude Code style -->
+            <div class="obs-stream">
+              <div class="obs-stream__text">test stage active · streaming live</div>
+
+              <div class="obs-stream__line">
+                <span class="obs-stream__glyph">⏺</span>
+                <span class="obs-stream__tool-name">Bash</span>
+                <span class="obs-stream__tool-arg">bun test src/</span>
+              </div>
+              <div class="obs-stream__line obs-stream__result">
+                <span class="obs-stream__result-glyph">⎿</span>
+                <span>30 / 30 passed in src/auth, src/api</span>
+              </div>
+              <div class="obs-stream__line obs-stream__result obs-stream__result--warn">
+                <span class="obs-stream__result-glyph">⎿</span>
+                <span>1 failing · src/utils.test.ts</span>
+              </div>
+
+              <div class="obs-stream__line">
+                <span class="obs-stream__glyph">⏺</span>
+                <span class="obs-stream__tool-name">Read</span>
+                <span class="obs-stream__tool-arg">src/utils.ts:42</span>
+              </div>
+              <div class="obs-stream__line obs-stream__result">
+                <span class="obs-stream__result-glyph">⎿</span>
+                <span>off-by-one in parseDate() month index</span>
+              </div>
+
+              <div class="obs-stream__line">
+                <span class="obs-stream__glyph">⏺</span>
+                <span class="obs-stream__tool-name">Edit</span>
+                <span class="obs-stream__tool-arg">src/utils.ts:42</span>
+              </div>
+              <div class="obs-stream__line">
+                <span class="obs-stream__glyph">⏺</span>
+                <span class="obs-stream__tool-name">Bash</span>
+                <span class="obs-stream__tool-arg">bun test src/utils.test.ts</span>
+              </div>
+              <div class="obs-stream__line obs-stream__result obs-stream__result--ok">
+                <span class="obs-stream__result-glyph">⎿</span>
+                <span>✓ 12 / 12 passed</span>
+              </div>
+            </div>
+
+            <!-- Stage strip — glyphs from src/sdk/components/status-helpers.ts:25 -->
+            <div class="obs-stages">
+              <span class="obs-stages__item">
+                <span class="obs-stages__icon obs-stages__icon--complete">✓</span>
+                <span class="obs-stages__label">scan</span>
+              </span>
+              <span class="obs-stages__sep">·</span>
+              <span class="obs-stages__item">
+                <span class="obs-stages__icon obs-stages__icon--running">●</span>
+                <span class="obs-stages__label obs-stages__label--active">test</span>
+              </span>
+              <span class="obs-stages__sep">·</span>
+              <span class="obs-stages__item">
+                <span class="obs-stages__icon obs-stages__icon--pending">○</span>
+                <span class="obs-stages__label">lint</span>
+              </span>
+              <span class="obs-stages__sep">·</span>
+              <span class="obs-stages__item">
+                <span class="obs-stages__icon obs-stages__icon--pending">○</span>
+                <span class="obs-stages__label">review</span>
+              </span>
+            </div>
+
+            <!-- AttachedStatusline — matches src/sdk/components/attached-statusline.tsx -->
+            <div class="obs-statusline">
+              <span class="obs-statusline__pill obs-statusline__pill--claude">CLAUDE</span>
+              <span class="obs-statusline__spacer"></span>
+              <span class="obs-statusline__hint">
+                <span class="obs-statusline__key">ctrl+b d</span>
+                <span class="obs-statusline__action">detach</span>
+              </span>
             </div>
           </div>
 
@@ -503,11 +663,6 @@
                 <span class="outcome__label">review</span>
                 <span class="outcome__skill">pr-summary</span>
                 <span class="outcome__value">PR&nbsp;#482 opened</span>
-              </div>
-              <div class="outcome__divider"></div>
-              <div class="outcome__footer">
-                <span><span class="outcome__footer-key">log</span>&nbsp; .atomic/runs/482</span>
-                <span><span class="outcome__footer-key">replay</span>&nbsp; atomic run ship</span>
               </div>
             </div>
           </div>
