@@ -59,13 +59,13 @@ flowchart LR
     Primitive --> Resolve["resolvePane()<br/>read ~/.atomic/sessions/&lt;runId&gt;/&lt;stage&gt;-*/metadata.json"]
     Resolve --> Snapshot[("status.json<br/>(stage state guard)")]
     Resolve --> MetaFile[("metadata.json<br/>(paneId)")]
-    Primitive --> ProviderSDK["OpenCode / Copilot SDK<br/>(client.session.prompt)"]
-    Primitive --> Queue["~/.atomic/claude-queue/&lt;claudeSessionId&gt;<br/>(Claude default)"]
-    Primitive --> ClaudeTmux["sendViaPasteBuffer + C-m<br/>(Claude --queueMessage)"]
+    Primitive --> OpenCodeSDK["OpenCode SDK<br/>(client.session.prompt)<br/>--queueMessage forbidden"]
+    Primitive --> CopilotSDK["Copilot SDK<br/>direct or queue primitive<br/>(--queueMessage optional)"]
+    Primitive --> Queue["enqueuePrompt() →<br/>~/.atomic/claude-queue/&lt;claudeSessionId&gt;<br/>(--queueMessage required)"]
     Queue --> Hook["claude Stop hook<br/>(blocked, picks up file)"]
-    ProviderSDK --> Pane["tmux pane<br/>(opencode / copilot CLI)"]
-    ClaudeTmux --> ClaudeCLI["Claude CLI<br/>(native input queue)"]
-    Hook --> ClaudeCLI
+    OpenCodeSDK --> Pane["tmux pane<br/>(opencode / copilot CLI)"]
+    CopilotSDK --> Pane
+    Hook --> ClaudePane["tmux pane<br/>(claude CLI)"]
 ```
 
 ### 4.2 Architectural Pattern
@@ -100,7 +100,7 @@ Options:
 | `--message <text>`            | no       | Alternative to positional `<message...>`. Useful when message starts with `-`.            |
 | `--message-file <path>`       | no       | Read message body from a file. Supersedes positional / `--message`.                       |
 | `--format <json\|text>`       | no       | Output format. JSON when invoked under `ATOMIC_AGENT=1`, text otherwise.                 |
-| `--queueMessage`              | no       | Queue-while-busy mode. Honored by Copilot (native SDK queue primitive) and Claude (`tmux send-keys` into the pane — Claude Code's CLI queues input internally and processes it on the next turn boundary). For OpenCode the flag errors with `QueueingUnsupportedError` because the SDK has no equivalent primitive and the OpenCode CLI does not queue tmux input. |
+| `--queueMessage`              | varies   | Opt into asynchronous queue-and-forget delivery. **Required** for Claude (no synchronous channel exists; `enqueuePrompt()` is fire-and-forget by nature). **Optional** for Copilot (forwards to its SDK queue primitive). **Forbidden** for OpenCode (no SDK queue primitive, errors with `QueueingUnsupportedError`). See §5.4 for the matrix. |
 | `<message...>`                | no       | Positional; joined by single spaces. Must be present unless `--message` / `--message-file` is. |
 
 Examples:
@@ -121,7 +121,7 @@ export interface SendToStageResult {
   stageId: string;
   paneId: string;
   bytesSent: number;
-  channel: "claude-queue" | "claude-tmux" | "opencode-sdk" | "copilot-sdk";
+  channel: "claude-queue" | "opencode-sdk" | "copilot-sdk";
 }
 
 /** Options accepted by sendToStage. */
@@ -130,14 +130,13 @@ export interface SendToStageOptions {
   stageId: string;               // stage name
   message: string;
   /**
-   * Queue-while-busy mode. When set:
-   *   - Copilot: forwards to the SDK's native queue primitive.
-   *   - Claude:  delivers via `tmux send-keys` (paste-buffer); Claude Code's CLI
-   *              queues input internally and processes it on the next turn boundary.
-   *   - OpenCode: throws `QueueingUnsupportedError` (no SDK primitive and the CLI
-   *              does not queue tmux input).
-   * When unset, OpenCode/Copilot use direct SDK prompt calls (busy → StageNotReadyError),
-   * Claude uses the persisted-claudeSessionId queue file via `enqueuePrompt()`.
+   * Opt into asynchronous queue-and-forget delivery. Per-agent semantics:
+   *   - Claude:  REQUIRED. Without it -> `QueueingRequiredError`. With it ->
+   *              `enqueuePrompt()` writes to the persisted-claudeSessionId queue file.
+   *   - Copilot: OPTIONAL. With it -> SDK's native queue primitive (succeeds while busy).
+   *              Without it -> direct SDK prompt (busy -> `StageNotReadyError`).
+   *   - OpenCode: FORBIDDEN. With it -> `QueueingUnsupportedError`.
+   *               Without it -> direct SDK prompt (busy -> `StageNotReadyError`).
    */
   queueMessage?: boolean;
   deps?: SessionPrimitiveDeps;   // existing dep-injection seam, extended
@@ -157,6 +156,7 @@ Errors thrown (mapped to exit codes by the CLI):
 | `StageNotFoundError` (new)   | No `<stage>-*/metadata.json` matches `stageId` under the run dir.   | 1         |
 | `StageNotReadyError` (new)   | Stage status is `done` / `errored`, stage is headless, or pane no longer alive. | 2         |
 | `EmptyMessageError` (new)    | Message resolved to empty string after trimming.                    | 1         |
+| `QueueingRequiredError` (new)    | Claude target invoked **without** `--queueMessage`.                | 1         |
 | `QueueingUnsupportedError` (new) | `--queueMessage` passed for an agent whose SDK has no queue primitive (currently OpenCode). | 1 |
 
 ### 5.3 Resolution Algorithm
@@ -173,11 +173,19 @@ Given `(sessionId, stageId)`:
 
 ### 5.4 Delivery Algorithm
 
-Routing per agent (decided 2026-05-07, updated 2026-05-07 to drop the idle-only Claude constraint):
+Routing matrix (decided 2026-05-07, simplified 2026-05-07: `--queueMessage` is the explicit toggle for asynchronous queue-and-forget delivery; required for Claude, optional for Copilot, forbidden for OpenCode):
 
-- **OpenCode**: read `serverUrl` from `<stage>/metadata.json`, instantiate `createOpencodeClient({ baseUrl: serverUrl })`, deliver via the OpenCode SDK's prompt method against the persisted `providerSessionId`. Mirrors how the orchestrator drove OpenCode at `runtime/executor.ts:1525–1530`. No tmux keystrokes. **Queueing**: the OpenCode SDK has no queue-while-busy primitive and the OpenCode CLI does not queue tmux input — passing `--queueMessage` raises `QueueingUnsupportedError`. Without the flag, sending while OpenCode is mid-turn returns the SDK's own busy error mapped to `StageNotReadyError` (caller can retry). Result `channel: "opencode-sdk"`.
-- **Copilot**: read `serverUrl` from `<stage>/metadata.json`, instantiate `new CopilotClient({ cliUrl: serverUrl })`, `client.start()`, deliver via the SDK against the persisted `providerSessionId` (set at `runtime/executor.ts:1495`). No tmux keystrokes. **Queueing**: the Copilot SDK exposes a native queue option — when `--queueMessage` is set we forward it so the SDK enqueues the prompt and returns success even if the agent is currently busy. Without the flag, mid-turn sends behave like OpenCode (busy → `StageNotReadyError`). Result `channel: "copilot-sdk"`.
-- **Claude**: two paths depending on `--queueMessage`. **Default (no flag)**: read `claudeSessionId` from `<stage>/metadata.json` and call the same `enqueuePrompt()` mechanism the orchestrator already uses (`providers/claude.ts:761`) — write the message to `~/.atomic/claude-queue/<claudeSessionId>`, and Claude's Stop hook picks it up on the next idle boundary. Result `channel: "claude-queue"`. **With `--queueMessage`**: deliver via `sendViaPasteBuffer(paneId, message)` followed by `sendSpecialKey(paneId, "C-m")`. The Claude Code CLI queues tmux input internally — if Claude is mid-stream the input lands in its native input queue and is processed on the next turn boundary; if Claude is at the input box it submits immediately. Result `channel: "claude-tmux"`. Either path is non-blocking on the caller side; choice is about *whose* queue holds the message (atomic's queue file vs. Claude's own input queue).
+| Agent     | `--queueMessage` absent                                           | `--queueMessage` present                                                | Resulting `channel` |
+| --------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------- |
+| Claude    | `QueueingRequiredError` (exit 1)                                  | `enqueuePrompt()` writes to `~/.atomic/claude-queue/<claudeSessionId>`; Stop hook picks it up on the next turn boundary. | `"claude-queue"`    |
+| Copilot   | Direct SDK prompt against persisted `providerSessionId`. Busy → `StageNotReadyError` (exit 2). | SDK's native queue primitive (forwarded as a flag on the prompt call); succeeds even while busy. | `"copilot-sdk"`     |
+| OpenCode  | Direct SDK prompt against persisted `providerSessionId`. Busy → `StageNotReadyError` (exit 2). | `QueueingUnsupportedError` (exit 1)                                     | `"opencode-sdk"`    |
+
+Per-agent details:
+
+- **OpenCode**: read `serverUrl` from `<stage>/metadata.json`, instantiate `createOpencodeClient({ baseUrl: serverUrl })`, deliver via the OpenCode SDK's prompt method against the persisted `providerSessionId`. Mirrors how the orchestrator drove OpenCode at `runtime/executor.ts:1525–1530`. No tmux keystrokes. The OpenCode SDK has no queue-while-busy primitive, so `--queueMessage` is rejected upfront — failing loudly is preferred over silently doing the same thing the unflagged path does, because it keeps the per-agent contract crisp.
+- **Copilot**: read `serverUrl` from `<stage>/metadata.json`, instantiate `new CopilotClient({ cliUrl: serverUrl })`, `client.start()`, deliver via the SDK against the persisted `providerSessionId` (set at `runtime/executor.ts:1495`). `--queueMessage` is the *only* flag whose presence changes Copilot's behavior — the implementation forwards it as the SDK's queue option so the prompt enqueues even mid-turn.
+- **Claude**: read `claudeSessionId` from `<stage>/metadata.json` and call the same `enqueuePrompt()` mechanism the orchestrator already uses (`providers/claude.ts:761`) — write the message to `~/.atomic/claude-queue/<claudeSessionId>`, and Claude's Stop hook picks it up on the next turn boundary. Claude has no synchronous "send and observe completion" path, so the only correct mode is fire-and-queue. Requiring `--queueMessage` makes that semantic explicit at the call site instead of letting it be implicit-by-agent — a caller that omits the flag is forced to acknowledge they understand the asynchronous contract.
 
 Submission is always implicit — there is no `--no-submit` escape hatch. Every send is a complete prompt; callers compose the full message client-side before invoking the command.
 
@@ -258,7 +266,13 @@ Match `workflow status` precedent: default JSON when `ATOMIC_AGENT=1` is set (th
 - **Unit (atomic CLI)**: `workflow-send.test.ts` exercises Commander parsing, `--message-file`, `--no-submit`, JSON vs text output, exit codes for each error class. Use the existing dependency-injection seam shown in `workflow-status.test.ts`.
 - **Integration**: spawn a real `atomic workflow -n ralph -a opencode "..."` session (already covered by `workflow.test.ts` patterns), call `atomic workflow send` against it, capture the pane and assert the message is visible.
 - **Cross-platform**: the runtime-assets smoke harness already validates tmux subprocess plumbing; no new matrix work needed.
-- **`--queueMessage` matrix**: assert Copilot honors the flag via SDK queue primitive (queued send while busy → success); Claude switches channel from `"claude-queue"` (default) to `"claude-tmux"` (paste-buffer + `C-m`) and both succeed mid-stream; OpenCode raises `QueueingUnsupportedError` when the flag is set.
+- **`--queueMessage` matrix** (one test per cell of §5.4):
+  - Claude without flag → `QueueingRequiredError` (exit 1).
+  - Claude with flag → writes to `~/.atomic/claude-queue/<claudeSessionId>`; Stop hook delivers (`channel: "claude-queue"`).
+  - Copilot without flag → direct SDK prompt; busy session → `StageNotReadyError`.
+  - Copilot with flag → SDK queue primitive forwarded; busy session → success (`channel: "copilot-sdk"`).
+  - OpenCode without flag → direct SDK prompt; busy session → `StageNotReadyError`.
+  - OpenCode with flag → `QueueingUnsupportedError` (exit 1).
 - **Skill regression**: snapshot test the rendered `.agents/skills/workflow-creator` skill output to ensure the new command + flag appear in the synthesized prompt the SDK agents see.
 
 ## 9. Open Questions / Unresolved Issues
@@ -273,5 +287,5 @@ Match `workflow status` precedent: default JSON when `ATOMIC_AGENT=1` is set (th
 - [x] **Q8 — SDK exposure**: **Resolved 2026-05-07** — public primitive in `primitives/sessions.ts`, re-exported via the SDK barrel; CLI command is a thin Commander wrapper.
 - [x] **Q9 — Headless stage handling**: **Resolved 2026-05-07** — hard-error with `StageNotReadyError("stage is headless; send is not supported for in-process stages")`. File-based delivery for headless stages can be a Phase N follow-up if a use case emerges.
 - [x] **Q10 — Force flag**: **Resolved 2026-05-07** — no `--force` in Phase 1.
-- [x] **Q11 — Queue-while-busy semantics**: **Resolved 2026-05-07 (revised)** — add `--queueMessage` flag. Honored by Copilot (forwards to SDK queue primitive) and Claude (`tmux send-keys` paste-buffer; Claude Code's CLI queues input internally). Errors with `QueueingUnsupportedError` for OpenCode (no SDK primitive and the CLI does not queue tmux input). Default Claude path remains the queue file; `--queueMessage` switches Claude to the tmux-native channel and is reported as `channel: "claude-tmux"`.
+- [x] **Q11 — Queue-while-busy semantics**: **Resolved 2026-05-07 (final)** — `--queueMessage` is the explicit toggle for asynchronous queue-and-forget delivery. **Required** for Claude (only mode; without flag → `QueueingRequiredError`; with flag → `enqueuePrompt()` queue file). **Optional** for Copilot (without → direct SDK prompt; with → SDK queue primitive). **Forbidden** for OpenCode (with flag → `QueueingUnsupportedError`; without → direct SDK prompt). The flag therefore has a non-trivial effect only on Copilot; for Claude and OpenCode it is a strict shape-of-call assertion. See §5.4 matrix.
 - [x] **Q12 — Skill discoverability**: **Resolved 2026-05-07** — the `.agents/skills/workflow-creator` skill must be updated as part of this change so the three SDK agents (Claude / Copilot / OpenCode) surface `atomic workflow send` and its `--queueMessage` semantics when authoring or running workflows. The skill update ships in the same PR as the implementation.
