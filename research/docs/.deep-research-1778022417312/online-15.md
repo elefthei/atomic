@@ -1,0 +1,3 @@
+(no external research applicable)
+
+The libraries present in the scoped files — Commander.js (`program.parseAsync`), `@clack/prompts`, and `figlet` — are CLI scaffolding and terminal-presentation utilities. None of them contribute to workflow orchestration, step sequencing, or determinism guarantees. The determinism characteristics of Atomic's workflows are governed entirely by the internal `createWorkflowCli`, `createBuiltinRegistry`, and `runCli` implementations found in project source, not by any of these external dependencies. Consulting Commander.js, Clack, or Figlet documentation would not illuminate how Atomic achieves deterministic workflow execution.

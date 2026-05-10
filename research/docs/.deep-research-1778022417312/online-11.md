@@ -1,0 +1,3 @@
+(no external research applicable)
+
+The `assets/` partition contains only marketing presentation materials (HTML slides, PNG palette files, a Playwright-based slide renderer, and a design philosophy document). None of these files import or depend on external libraries that are central to how Atomic's deterministic workflows function. The partition documents the workflow concept visually (slide 03 shows a `defineWorkflow()` mock, slide 04 shows architecture topology) but contains no runtime implementation code that would require external library documentation to understand. Deterministic workflow logic resides in other partitions such as `src/`.
