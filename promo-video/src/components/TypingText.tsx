@@ -26,8 +26,7 @@ export const TypingText: React.FC<{
   const elapsed = Math.max(0, frame - startFrame);
   const visibleCount = Math.min(text.length, Math.floor(elapsed * charsPerFrame));
   const visible = text.slice(0, visibleCount);
-  const done = visibleCount >= text.length;
-  const showCursor = cursor && (done ? Math.floor(frame / 15) % 2 === 0 : true);
+  const showCursor = cursor;
 
   return (
     <span style={{ whiteSpace: "pre-wrap", ...style }} className={className}>

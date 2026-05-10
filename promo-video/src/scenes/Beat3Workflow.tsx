@@ -382,10 +382,25 @@ const OrchestratorGraphTUI: React.FC<{ frame: number }> = ({ frame }) => {
 
       {/* Canvas */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", backgroundColor: colors.mochaBase }}>
-        {/* Trunk edges between nodes — fade in with each node */}
-        <Edge top={108} height={84} state={plannerActive > 0.6 && orchActive > 0 ? "complete" : "idle"} />
-        <Edge top={248} height={84} state={orchActive > 0.6 && testActive > 0 ? "complete" : "idle"} />
-        <Edge top={388} height={84} state={testActive > 0.6 && gateAppear > 0 ? "complete" : "idle"} />
+        {/* Trunk edges between nodes — each grows in sync with the downstream node it connects */}
+        <Edge
+          top={108}
+          height={84}
+          state={plannerActive > 0.6 && orchActive > 0 ? "complete" : "idle"}
+          appear={orchActive}
+        />
+        <Edge
+          top={248}
+          height={84}
+          state={orchActive > 0.6 && testActive > 0 ? "complete" : "idle"}
+          appear={testActive}
+        />
+        <Edge
+          top={388}
+          height={84}
+          state={testActive > 0.6 && gateAppear > 0 ? "complete" : "idle"}
+          appear={gateAppear}
+        />
 
         {/* Loop arc — mauve dashed, fades in with HIL focus */}
         <svg
@@ -617,11 +632,12 @@ const Hint: React.FC<{ k: string; label: string }> = ({ k, label }) => (
   </span>
 );
 
-const Edge: React.FC<{ top: number; height: number; state: "idle" | "complete" | "failed" }> = ({
-  top,
-  height,
-  state,
-}) => {
+const Edge: React.FC<{
+  top: number;
+  height: number;
+  state: "idle" | "complete" | "failed";
+  appear: number;
+}> = ({ top, height, state, appear }) => {
   const bg =
     state === "complete"
       ? "rgba(166, 227, 161, 0.55)"
@@ -637,6 +653,9 @@ const Edge: React.FC<{ top: number; height: number; state: "idle" | "complete" |
         width: 1.5,
         height,
         backgroundColor: bg,
+        opacity: appear,
+        transform: `scaleY(${appear})`,
+        transformOrigin: "top center",
       }}
     />
   );
