@@ -7,12 +7,8 @@ import {
   OrchestratorNode,
   OrchestratorEdge,
   clamp01,
+  type NodeState,
 } from "../components/OrchestratorChrome";
-import {
-  OrchestratorGridGraph,
-  type GridNodeInput,
-} from "../components/orchestrator-grid/OrchestratorGridGraph";
-import type { SessionStatus } from "../components/orchestrator-grid/layout";
 import { colors, fonts } from "../theme";
 
 /**
@@ -125,11 +121,9 @@ const Vignette: React.FC<{ label: string; copy: string; children: React.ReactNod
 
 /* =============================================================================
    Vignette 1 — parallel.
-   Diamond DAG rendered through the production grid renderer
-   (computeLayout + buildConnector / buildMergeConnector ported from
-   src/sdk/components/{layout,connectors}.ts). One bar per fan-out, one bar
-   per fan-in, junction characters drawn at every corner — same output as
-   the real session-graph-panel.
+   Diamond DAG rendered with OrchestratorNode + OrchestratorEdge so the box
+   outlines match the sandboxed vignette (CSS rounded corners, title floated
+   on the border) instead of the ASCII grid renderer.
 ============================================================================= */
 
 const ParallelDAG: React.FC = () => {
@@ -154,15 +148,15 @@ const ParallelDAG: React.FC = () => {
   const aggAppear = clamp01((frame - 48) / 6);
   const aggRunning = clamp01((frame - 50) / 4);
 
-  const stateOf = (running: number, complete: number): SessionStatus =>
-    complete > 0.6 ? "complete" : running > 0.3 ? "running" : "pending";
+  const stateOf = (running: number, complete: number): NodeState =>
+    complete > 0.6 ? "complete" : running > 0.3 ? "running" : "idle";
 
   const scan = stateOf(scanRunning, scanComplete);
   const cwe = stateOf(b1Running, b1Complete);
   const cve = stateOf(b1Running, b1Complete);
   const triage = stateOf(b2Running, b2Complete);
   const flag = stateOf(b2Running, b2Complete);
-  const agg: SessionStatus = aggRunning > 0.3 ? "running" : "pending";
+  const agg: NodeState = aggRunning > 0.3 ? "running" : "idle";
 
   // Edges fade in *after* their parent box has fully appeared and *before*
   // the children boxes appear, so the DAG paints box → edge → box → edge …
@@ -171,62 +165,32 @@ const ParallelDAG: React.FC = () => {
   const b2EdgeOut = clamp01((frame - 42) / 4);
   const aggEdgeIn = clamp01((frame - 44) / 4);
 
-  const nodes: GridNodeInput[] = [
-    {
-      name: "scan-source",
-      status: scan,
-      parents: [],
-      duration: scan === "complete" ? "0:12" : scan === "running" ? liveDuration(frame, 6) : "—",
-      appear: scanAppear,
-      outgoingEdgeAppear: scanEdgeOut,
-    },
-    {
-      name: "analyze-cwe",
-      status: cwe,
-      parents: ["scan-source"],
-      duration: cwe === "complete" ? "0:14" : cwe === "running" ? liveDuration(frame, 18) : "—",
-      appear: b1Appear,
-      outgoingEdgeAppear: b1EdgeOut,
-    },
-    {
-      name: "check-cve",
-      status: cve,
-      parents: ["scan-source"],
-      duration: cve === "complete" ? "0:16" : cve === "running" ? liveDuration(frame, 18) : "—",
-      appear: b1Appear,
-      outgoingEdgeAppear: b1EdgeOut,
-    },
-    {
-      name: "triage-findings",
-      status: triage,
-      parents: ["analyze-cwe"],
-      duration: triage === "complete" ? "0:14" : triage === "running" ? liveDuration(frame, 34) : "—",
-      appear: b2Appear,
-      outgoingEdgeAppear: b2EdgeOut,
-    },
-    {
-      name: "flag-criticals",
-      status: flag,
-      parents: ["check-cve"],
-      duration: flag === "complete" ? "0:13" : flag === "running" ? liveDuration(frame, 34) : "—",
-      appear: b2Appear,
-      outgoingEdgeAppear: b2EdgeOut,
-    },
-    {
-      name: "aggregator",
-      status: agg,
-      parents: ["triage-findings", "flag-criticals"],
-      duration: agg === "running" ? liveDuration(frame, 50) : "—",
-      appear: aggAppear,
-      incomingEdgeAppear: aggEdgeIn,
-    },
-  ];
-
-  const completeCount = nodes.filter((n) => n.status === "complete").length;
-  const runningCount = nodes.filter((n) => n.status === "running").length;
-  const pendingCount = nodes.filter((n) => n.status === "pending").length;
+  const completeCount = [scan, cwe, cve, triage, flag, agg].filter((s) => s === "complete").length;
+  const runningCount = [scan, cwe, cve, triage, flag, agg].filter((s) => s === "running").length;
+  const pendingCount = [scan, cwe, cve, triage, flag, agg].filter((s) => s === "idle").length;
 
   const pulsePhase = (frame % 60) / 60;
+
+  // Diamond DAG layout — three columns, four rows.
+  const cxC = 510;
+  const cxL = 320;
+  const cxR = 700;
+  const yScan = 80;
+  const yRow1 = 230;
+  const yRow2 = 380;
+  const yAgg = 540;
+  const halfH = 32; // OrchestratorNode default height / 2
+
+  const edgeStateFromParent = (childRunning: NodeState, parentComplete: NodeState):
+    "idle" | "running" | "complete" =>
+    parentComplete === "complete" && childRunning !== "idle"
+      ? "complete"
+      : childRunning === "running"
+        ? "running"
+        : "idle";
+
+  const yMid01 = (yScan + halfH + yRow1 - halfH) / 2;
+  const yMid23 = (yRow2 + halfH + yAgg - halfH) / 2;
 
   return (
     <OrchestratorChrome
@@ -243,7 +207,118 @@ const ParallelDAG: React.FC = () => {
           : undefined
       }
     >
-      <OrchestratorGridGraph nodes={nodes} pulsePhase={pulsePhase} fontSize={17} />
+      {/* scan → cwe / cve fan-out (Z-shape with mid bus) */}
+      <OrchestratorEdge
+        x1={cxC}
+        y1={yScan + halfH}
+        x2={cxL}
+        y2={yRow1 - halfH}
+        corners={[{ x: cxC, y: yMid01 }, { x: cxL, y: yMid01 }]}
+        state={edgeStateFromParent(cwe, scan)}
+        appear={scanEdgeOut}
+      />
+      <OrchestratorEdge
+        x1={cxC}
+        y1={yScan + halfH}
+        x2={cxR}
+        y2={yRow1 - halfH}
+        corners={[{ x: cxC, y: yMid01 }, { x: cxR, y: yMid01 }]}
+        state={edgeStateFromParent(cve, scan)}
+        appear={scanEdgeOut}
+      />
+
+      {/* row 1 → row 2 (straight) */}
+      <OrchestratorEdge
+        x1={cxL}
+        y1={yRow1 + halfH}
+        x2={cxL}
+        y2={yRow2 - halfH}
+        state={edgeStateFromParent(triage, cwe)}
+        appear={b1EdgeOut}
+      />
+      <OrchestratorEdge
+        x1={cxR}
+        y1={yRow1 + halfH}
+        x2={cxR}
+        y2={yRow2 - halfH}
+        state={edgeStateFromParent(flag, cve)}
+        appear={b1EdgeOut}
+      />
+
+      {/* row 2 → aggregator fan-in */}
+      <OrchestratorEdge
+        x1={cxL}
+        y1={yRow2 + halfH}
+        x2={cxC}
+        y2={yAgg - halfH}
+        corners={[{ x: cxL, y: yMid23 }, { x: cxC, y: yMid23 }]}
+        state={edgeStateFromParent(agg, triage)}
+        appear={Math.min(b2EdgeOut, aggEdgeIn)}
+      />
+      <OrchestratorEdge
+        x1={cxR}
+        y1={yRow2 + halfH}
+        x2={cxC}
+        y2={yAgg - halfH}
+        corners={[{ x: cxR, y: yMid23 }, { x: cxC, y: yMid23 }]}
+        state={edgeStateFromParent(agg, flag)}
+        appear={Math.min(b2EdgeOut, aggEdgeIn)}
+      />
+
+      <OrchestratorNode
+        cx={cxC}
+        cy={yScan}
+        title="scan-source"
+        state={scan}
+        appear={scanAppear}
+        pulse={pulsePhase}
+        duration={scan === "complete" ? "0:12" : scan === "running" ? liveDuration(frame, 6) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxL}
+        cy={yRow1}
+        title="analyze-cwe"
+        state={cwe}
+        appear={b1Appear}
+        pulse={pulsePhase + 0.15}
+        duration={cwe === "complete" ? "0:14" : cwe === "running" ? liveDuration(frame, 18) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxR}
+        cy={yRow1}
+        title="check-cve"
+        state={cve}
+        appear={b1Appear}
+        pulse={pulsePhase + 0.30}
+        duration={cve === "complete" ? "0:16" : cve === "running" ? liveDuration(frame, 18) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxL}
+        cy={yRow2}
+        title="triage-findings"
+        state={triage}
+        appear={b2Appear}
+        pulse={pulsePhase + 0.45}
+        duration={triage === "complete" ? "0:14" : triage === "running" ? liveDuration(frame, 34) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxR}
+        cy={yRow2}
+        title="flag-criticals"
+        state={flag}
+        appear={b2Appear}
+        pulse={pulsePhase + 0.60}
+        duration={flag === "complete" ? "0:13" : flag === "running" ? liveDuration(frame, 34) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxC}
+        cy={yAgg}
+        title="aggregator"
+        state={agg}
+        appear={aggAppear}
+        pulse={pulsePhase + 0.75}
+        duration={agg === "running" ? liveDuration(frame, 50) : "—"}
+      />
 
       {/* Code echo: Promise.all middle slice — top-right, persists through vignette */}
       <CodeAnnotation visible={clamp01((frame - 10) / 8)} />
@@ -534,8 +609,8 @@ const DeterministicReplay: React.FC = () => {
 
   const pulsePhase = (frame % 60) / 60;
 
-  const stateOf = (running: number, complete: number): SessionStatus =>
-    complete > 0.6 ? "complete" : running > 0.3 ? "running" : "pending";
+  const stateOf = (running: number, complete: number): NodeState =>
+    complete > 0.6 ? "complete" : running > 0.3 ? "running" : "idle";
 
   const scout = stateOf(scoutRunning, scoutComplete);
   const branch = stateOf(branchRunning, branchComplete);
@@ -547,44 +622,29 @@ const DeterministicReplay: React.FC = () => {
   const branchEdgeOut = clamp01((frame - 30) / 4);
   const aggEdgeIn = clamp01((frame - 36) / 4);
 
-  const nodes: GridNodeInput[] = [
-    {
-      name: "scout",
-      status: scout,
-      parents: [],
-      duration: scout === "complete" ? "0:08" : scout === "running" ? liveDuration(frame, 8) : "—",
-      appear: scoutAppear,
-      outgoingEdgeAppear: scoutEdgeOut,
-    },
-    {
-      name: "analyze",
-      status: branch,
-      parents: ["scout"],
-      duration: branch === "complete" ? "0:14" : branch === "running" ? liveDuration(frame, 22) : "—",
-      appear: branchAppear,
-      outgoingEdgeAppear: branchEdgeOut,
-    },
-    {
-      name: "check",
-      status: branch,
-      parents: ["scout"],
-      duration: branch === "complete" ? "0:13" : branch === "running" ? liveDuration(frame, 22) : "—",
-      appear: branchAppear,
-      outgoingEdgeAppear: branchEdgeOut,
-    },
-    {
-      name: "aggregate",
-      status: agg,
-      parents: ["analyze", "check"],
-      duration: agg === "complete" ? "0:06" : agg === "running" ? liveDuration(frame, 42) : "—",
-      appear: aggAppear,
-      incomingEdgeAppear: aggEdgeIn,
-    },
-  ];
+  const completeCount = [scout, branch, branch, agg].filter((s) => s === "complete").length;
+  const runningCount = [scout, branch, branch, agg].filter((s) => s === "running").length;
+  const pendingCount = [scout, branch, branch, agg].filter((s) => s === "idle").length;
 
-  const completeCount = nodes.filter((n) => n.status === "complete").length;
-  const runningCount = nodes.filter((n) => n.status === "running").length;
-  const pendingCount = nodes.filter((n) => n.status === "pending").length;
+  // Diamond DAG layout — three rows, three columns.
+  const cxC = 510;
+  const cxL = 340;
+  const cxR = 680;
+  const yScout = 110;
+  const yBranch = 310;
+  const yAgg = 510;
+  const halfH = 32;
+
+  const edgeStateFromParent = (childRunning: NodeState, parentComplete: NodeState):
+    "idle" | "running" | "complete" =>
+    parentComplete === "complete" && childRunning !== "idle"
+      ? "complete"
+      : childRunning === "running"
+        ? "running"
+        : "idle";
+
+  const yMid01 = (yScout + halfH + yBranch - halfH) / 2;
+  const yMid12 = (yBranch + halfH + yAgg - halfH) / 2;
 
   return (
     <OrchestratorChrome
@@ -601,11 +661,82 @@ const DeterministicReplay: React.FC = () => {
           : { icon: "◆", iconColor: colors.coolSapphire, text: "graph derived from await order" }
       }
     >
-      {/* Diamond DAG: scout → (analyze | check) → aggregate.
-          Connections rendered via the production grid renderer (same code path
-          as src/sdk/components/{layout,connectors}.ts) so corners, fan-out and
-          fan-in junctions match the real TUI character grid. */}
-      <OrchestratorGridGraph nodes={nodes} pulsePhase={pulsePhase} fontSize={17} />
+      {/* scout → analyze / check fan-out */}
+      <OrchestratorEdge
+        x1={cxC}
+        y1={yScout + halfH}
+        x2={cxL}
+        y2={yBranch - halfH}
+        corners={[{ x: cxC, y: yMid01 }, { x: cxL, y: yMid01 }]}
+        state={edgeStateFromParent(branch, scout)}
+        appear={scoutEdgeOut}
+      />
+      <OrchestratorEdge
+        x1={cxC}
+        y1={yScout + halfH}
+        x2={cxR}
+        y2={yBranch - halfH}
+        corners={[{ x: cxC, y: yMid01 }, { x: cxR, y: yMid01 }]}
+        state={edgeStateFromParent(branch, scout)}
+        appear={scoutEdgeOut}
+      />
+
+      {/* analyze / check → aggregate fan-in */}
+      <OrchestratorEdge
+        x1={cxL}
+        y1={yBranch + halfH}
+        x2={cxC}
+        y2={yAgg - halfH}
+        corners={[{ x: cxL, y: yMid12 }, { x: cxC, y: yMid12 }]}
+        state={edgeStateFromParent(agg, branch)}
+        appear={Math.min(branchEdgeOut, aggEdgeIn)}
+      />
+      <OrchestratorEdge
+        x1={cxR}
+        y1={yBranch + halfH}
+        x2={cxC}
+        y2={yAgg - halfH}
+        corners={[{ x: cxR, y: yMid12 }, { x: cxC, y: yMid12 }]}
+        state={edgeStateFromParent(agg, branch)}
+        appear={Math.min(branchEdgeOut, aggEdgeIn)}
+      />
+
+      <OrchestratorNode
+        cx={cxC}
+        cy={yScout}
+        title="scout"
+        state={scout}
+        appear={scoutAppear}
+        pulse={pulsePhase}
+        duration={scout === "complete" ? "0:08" : scout === "running" ? liveDuration(frame, 8) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxL}
+        cy={yBranch}
+        title="analyze"
+        state={branch}
+        appear={branchAppear}
+        pulse={pulsePhase + 0.25}
+        duration={branch === "complete" ? "0:14" : branch === "running" ? liveDuration(frame, 22) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxR}
+        cy={yBranch}
+        title="check"
+        state={branch}
+        appear={branchAppear}
+        pulse={pulsePhase + 0.5}
+        duration={branch === "complete" ? "0:13" : branch === "running" ? liveDuration(frame, 22) : "—"}
+      />
+      <OrchestratorNode
+        cx={cxC}
+        cy={yAgg}
+        title="aggregate"
+        state={agg}
+        appear={aggAppear}
+        pulse={pulsePhase + 0.75}
+        duration={agg === "complete" ? "0:06" : agg === "running" ? liveDuration(frame, 42) : "—"}
+      />
 
       <DeterministicCodeSlate visible={codeAnnotation} />
       <HashMatchStrip run1={run1Reveal} run2={run2Reveal} match={matchPulse} />

@@ -148,12 +148,64 @@ const CODE_LINES: Array<{ tokens: Token[]; indent?: number }> = [
 const tokenLength = (tokens: Token[]): number => tokens.reduce((n, x) => n + x.text.length, 0);
 
 // Pre-compute char offsets so each line types after the previous finishes.
-const CHARS_PER_FRAME = 4;
+// 5 chars/frame keeps the code reveal snappy enough to fit alongside the
+// longer prescriptive prompt while still reading as deliberate typing.
+const CHARS_PER_FRAME = 5;
 const lineStartFrame = (i: number, base: number): number => {
   let c = 0;
   for (let kk = 0; kk < i; kk++) c += tokenLength(CODE_LINES[kk].tokens) + 4;
   return base + c / CHARS_PER_FRAME;
 };
+
+// =============================================================================
+// Natural-language prompt typed into the ATOMIC terminal on the left.
+// Reads like a real engineer briefing the workflow-creator — every clause is
+// prescriptive enough that the generated stages have actual context to act on.
+// Each piece after "that" maps to a concrete part of the generated TypeScript:
+//   ship-feature workflow                ⇆  defineWorkflow({ name: "ship-feature" })
+//   has claude                            ⇆  .for("claude")
+//   plan the change against this repo    ⇆  ctx.stage({ name: "planner" })
+//   write the code                        ⇆  ctx.stage({ name: "build" })
+//   run `bun test`                        ⇆  ctx.stage({ name: "test" })
+//   open a draft PR for me to approve    ⇆  ctx.stage({ name: "review" })  (HIL)
+// =============================================================================
+const PROMPT_LINE_1: Token[] = [
+  { text: "use the ", color: colors.mochaText },
+  { text: "workflow-creator", color: colors.mauve },
+  { text: " skill to build a ", color: colors.mochaText },
+  { text: "ship-feature", color: colors.mochaSubtext0, italic: true },
+  { text: " workflow", color: colors.mochaText },
+];
+const PROMPT_LINE_2: Token[] = [
+  { text: "that has ", color: colors.mochaText },
+  { text: "claude", color: colors.yellow },
+  { text: " ", color: colors.mochaText },
+  { text: "plan the change", color: colors.green },
+  { text: " against ", color: colors.mochaText },
+  { text: "this repo", color: colors.mochaSubtext0, italic: true },
+  { text: ",", color: colors.mochaOverlay1 },
+];
+const PROMPT_LINE_3: Token[] = [
+  { text: "write the code", color: colors.green },
+  { text: ", run ", color: colors.mochaText },
+  { text: "`bun test`", color: colors.coolSky },
+  { text: ", then open a ", color: colors.mochaText },
+  { text: "draft PR", color: colors.blue },
+  { text: " for me to approve", color: colors.mochaText },
+];
+
+const PROMPT_CHARS_PER_FRAME = 4;
+const PROMPT_LINE_1_START = 10;
+const PROMPT_LINE_1_END =
+  PROMPT_LINE_1_START + tokenLength(PROMPT_LINE_1) / PROMPT_CHARS_PER_FRAME;
+const PROMPT_LINE_2_START = PROMPT_LINE_1_END + 3;
+const PROMPT_LINE_2_END =
+  PROMPT_LINE_2_START + tokenLength(PROMPT_LINE_2) / PROMPT_CHARS_PER_FRAME;
+const PROMPT_LINE_3_START = PROMPT_LINE_2_END + 3;
+const PROMPT_LINE_3_END =
+  PROMPT_LINE_3_START + tokenLength(PROMPT_LINE_3) / PROMPT_CHARS_PER_FRAME;
+const PROMPT_SUBMIT_FRAME = PROMPT_LINE_3_END + 4;
+const EDITOR_TYPING_BASE = PROMPT_SUBMIT_FRAME + 4;
 
 /**
  * Beat 3 — Product reveal. Code editor types out a workflow definition,
@@ -166,20 +218,44 @@ const lineStartFrame = (i: number, base: number): number => {
 export const Beat3Workflow: React.FC = () => {
   const frame = useCurrentFrame();
 
-  // Editor enters
-  const editorOpacity = interpolate(frame, [0, 14], [0, 1], { extrapolateRight: "clamp" });
-  const editorY = interpolate(frame, [0, 18], [40, 0], {
+  // Terminal enters first — establishes the "user invokes the skill" beat.
+  const terminalOpacity = interpolate(frame, [0, 12], [0, 1], { extrapolateRight: "clamp" });
+  const terminalY = interpolate(frame, [0, 16], [32, 0], {
     extrapolateRight: "clamp",
     extrapolateLeft: "clamp",
   });
 
-  // Around f=140 the editor slides left, TUI slides in from right
-  const splitProgress = interpolate(frame, [140, 175], [0, 1], {
+  // Editor enters right after the prompt is submitted — feels like the skill response.
+  const editorOpacity = interpolate(
+    frame,
+    [PROMPT_SUBMIT_FRAME - 4, PROMPT_SUBMIT_FRAME + 8],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+  const editorY = interpolate(
+    frame,
+    [PROMPT_SUBMIT_FRAME - 4, PROMPT_SUBMIT_FRAME + 12],
+    [32, 0],
+    { extrapolateRight: "clamp", extrapolateLeft: "clamp" },
+  );
+
+  // Around f=170 the split pane slides left, orchestrator graph slides in from right.
+  const SLIDE_START = 170;
+  const SLIDE_END = 205;
+  const splitProgress = interpolate(frame, [SLIDE_START, SLIDE_END], [0, 1], {
     extrapolateRight: "clamp",
     extrapolateLeft: "clamp",
   });
-  const editorX = interpolate(splitProgress, [0, 1], [0, -640]);
+  // Editor starts at left=880; translate -1360 puts left edge at -480 (matching the
+  // original slide endpoint of left=160, translate -640).
+  const editorX = interpolate(splitProgress, [0, 1], [0, -1360]);
   const editorScale = interpolate(splitProgress, [0, 1], [1, 0.74]);
+
+  // Terminal slides further left and fades — it has served its purpose.
+  const terminalX = interpolate(splitProgress, [0, 1], [0, -840]);
+  const terminalExitOpacity = interpolate(splitProgress, [0, 0.6], [1, 0], {
+    extrapolateRight: "clamp",
+  });
 
   const tuiX = interpolate(splitProgress, [0, 1], [880, 0]);
   const tuiOpacity = interpolate(splitProgress, [0, 0.4], [0, 1], { extrapolateRight: "clamp" });
@@ -187,12 +263,18 @@ export const Beat3Workflow: React.FC = () => {
   // Cursor follows the line currently being typed; lands on the last line once done.
   const activeLineIndex = (() => {
     for (let i = 0; i < CODE_LINES.length; i++) {
-      const start = lineStartFrame(i, 22);
+      const start = lineStartFrame(i, EDITOR_TYPING_BASE);
       const end = start + tokenLength(CODE_LINES[i].tokens) / CHARS_PER_FRAME;
       if (frame < end) return i;
     }
     return CODE_LINES.length - 1;
   })();
+
+  // Prompt → skill-response state for the terminal footer.
+  const promptSubmitted = frame >= PROMPT_SUBMIT_FRAME;
+  const codeDoneFrame = lineStartFrame(CODE_LINES.length - 1, EDITOR_TYPING_BASE) +
+    tokenLength(CODE_LINES[CODE_LINES.length - 1].tokens) / CHARS_PER_FRAME;
+  const codeCompiled = frame >= codeDoneFrame;
 
   return (
     <AbsoluteFill style={{ backgroundColor: colors.mochaCrust }}>
@@ -202,13 +284,32 @@ export const Beat3Workflow: React.FC = () => {
       </AbsoluteFill>
       <AbsoluteFill style={{ background: "radial-gradient(ellipse at 30% 50%, #11111b 0%, transparent 60%)" }} />
 
-      {/* Editor pane */}
+      {/* ATOMIC terminal — user invokes the workflow-creator skill in natural language */}
+      <div
+        style={{
+          position: "absolute",
+          top: 200,
+          left: 80,
+          width: 760,
+          height: 560,
+          opacity: terminalOpacity * terminalExitOpacity,
+          transform: `translate(${terminalX}px, ${terminalY}px)`,
+        }}
+      >
+        <PromptTerminal
+          frame={frame}
+          promptSubmitted={promptSubmitted}
+          codeCompiled={codeCompiled}
+        />
+      </div>
+
+      {/* Editor pane — code response begins the moment the prompt lands */}
       <div
         style={{
           position: "absolute",
           top: 130,
-          left: 160,
-          width: 1200,
+          left: 880,
+          width: 1000,
           height: 760,
           opacity: editorOpacity,
           transform: `translate(${editorX}px, ${editorY}px) scale(${editorScale})`,
@@ -224,7 +325,7 @@ export const Beat3Workflow: React.FC = () => {
         >
           <div style={{ fontSize: 22, lineHeight: 1.65 }}>
             {CODE_LINES.map((line, i) => {
-              const start = lineStartFrame(i, 22);
+              const start = lineStartFrame(i, EDITOR_TYPING_BASE);
               const indent = " ".repeat(line.indent ?? 0);
               return (
                 <div key={i} style={{ minHeight: 30 }}>
@@ -268,8 +369,136 @@ export const Beat3Workflow: React.FC = () => {
 };
 
 /* =============================================================================
+   PromptTerminal — natural-language invocation of the workflow-creator skill.
+   The clause typed after "that" maps line-for-line to the editor on the right:
+     planner / build / test / human review  ⇆  ctx.stage({ name: ... })
+     claude                                  ⇆  .for("claude")
+============================================================================= */
+
+const PromptTerminal: React.FC<{
+  frame: number;
+  promptSubmitted: boolean;
+  codeCompiled: boolean;
+}> = ({ frame, promptSubmitted, codeCompiled }) => {
+  // Status line cycles: "drafting" while editor types, "compiled" once done.
+  const statusFrame = Math.max(0, frame - PROMPT_SUBMIT_FRAME);
+  const spinnerChar = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"][
+    Math.floor(statusFrame / 3) % 10
+  ];
+
+  return (
+    <TUIFrame
+      badge="ATOMIC"
+      badgeColor={colors.mauve}
+      session="claude · ~/ship-feature"
+      counts={[{ label: "skill", value: "workflow-creator", color: colors.mauve }]}
+      height="100%"
+    >
+      <div style={{ fontSize: 16, lineHeight: 1.7, fontVariantNumeric: "tabular-nums" }}>
+        {/* Three-line natural-language prompt — prescriptive enough that each
+            stage has real context (repo, test command, PR-based HIL gate). */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <span style={{ color: colors.green, flexShrink: 0 }}>❯</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ minHeight: 28 }}>
+              <TypingTokens
+                tokens={PROMPT_LINE_1}
+                startFrame={PROMPT_LINE_1_START}
+                charsPerFrame={PROMPT_CHARS_PER_FRAME}
+                cursor={frame < PROMPT_LINE_1_END}
+                cursorChar="▍"
+                defaultColor={colors.mochaText}
+              />
+            </div>
+            <div style={{ minHeight: 28 }}>
+              <TypingTokens
+                tokens={PROMPT_LINE_2}
+                startFrame={PROMPT_LINE_2_START}
+                charsPerFrame={PROMPT_CHARS_PER_FRAME}
+                cursor={frame >= PROMPT_LINE_1_END && frame < PROMPT_LINE_2_END}
+                cursorChar="▍"
+                defaultColor={colors.mochaText}
+              />
+            </div>
+            <div style={{ minHeight: 28 }}>
+              <TypingTokens
+                tokens={PROMPT_LINE_3}
+                startFrame={PROMPT_LINE_3_START}
+                charsPerFrame={PROMPT_CHARS_PER_FRAME}
+                cursor={frame >= PROMPT_LINE_2_END && !promptSubmitted}
+                cursorChar="▍"
+                defaultColor={colors.mochaText}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Skill response — appears the instant the prompt is submitted. */}
+        {promptSubmitted && (
+          <div
+            style={{
+              marginTop: 22,
+              paddingTop: 14,
+              borderTop: `1px dashed ${colors.mochaOverlay0}`,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              opacity: interpolate(
+                frame,
+                [PROMPT_SUBMIT_FRAME, PROMPT_SUBMIT_FRAME + 6],
+                [0, 1],
+                { extrapolateRight: "clamp" },
+              ),
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ color: colors.mauve, fontSize: 14 }}>✶</span>
+              <span style={{ color: colors.mauve, fontWeight: 600 }}>workflow-creator</span>
+              <span style={{ color: colors.mochaOverlay1 }}>skill invoked</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                color: colors.mochaSubtext0,
+              }}
+            >
+              <span
+                style={{
+                  color: codeCompiled ? colors.green : colors.coolSky,
+                  width: 14,
+                  display: "inline-block",
+                  textAlign: "center",
+                }}
+              >
+                {codeCompiled ? "✓" : spinnerChar}
+              </span>
+              <span>
+                {codeCompiled ? "compiled" : "drafting"}{" "}
+                <span style={{ color: colors.coolSky }}>workflows/ship-feature.ts</span>
+              </span>
+            </div>
+            <div
+              style={{
+                color: colors.mochaOverlay1,
+                fontSize: 13,
+                paddingLeft: 24,
+                opacity: 0.85,
+              }}
+            >
+              4 stages · agent: claude · gate: draft PR review
+            </div>
+          </div>
+        )}
+      </div>
+    </TUIFrame>
+  );
+};
+
+/* =============================================================================
    Orchestrator graph TUI — full devcontainer-wrapped graph view that mirrors
-   assets/product-hunt/slides/human-in-the-loop.html. Climaxes at f=200..210
+   assets/product-hunt/slides/human-in-the-loop.html. Climaxes at f=230..242
    with the review-gate transitioning into the blue HIL focused state.
 ============================================================================= */
 
@@ -286,14 +515,14 @@ type NodeState = "idle" | "complete" | "failed" | "hil";
 
 const OrchestratorGraphTUI: React.FC<{ frame: number }> = ({ frame }) => {
   // Stage activation timeline (frames are local to Beat3).
-  // TUI is fully on screen by f=175. Climax HIL transition at f=200..212.
-  const plannerActive = clamp01((frame - 175) / 6);
-  const orchActive = clamp01((frame - 182) / 6);
-  const testActive = clamp01((frame - 189) / 6);
-  const gateAppear = clamp01((frame - 196) / 6);
-  const hilFocus = clamp01((frame - 200) / 12);
+  // TUI is fully on screen by f=205. Climax HIL transition at f=230..242.
+  const plannerActive = clamp01((frame - 205) / 6);
+  const orchActive = clamp01((frame - 212) / 6);
+  const testActive = clamp01((frame - 219) / 6);
+  const gateAppear = clamp01((frame - 226) / 6);
+  const hilFocus = clamp01((frame - 230) / 12);
 
-  const traceFade = clamp01((frame - 198) / 14);
+  const traceFade = clamp01((frame - 228) / 14);
 
   return (
     <div
