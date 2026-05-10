@@ -1,0 +1,25 @@
+{
+  "name": "atomic-promo-video",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.tsx",
+    "render": "remotion render src/index.tsx PromoVideo out/atomic-promo.mp4 --codec=h264 --crf=18",
+    "render:fast": "remotion render src/index.tsx PromoVideo out/atomic-promo.mp4 --codec=h264 --crf=23 --concurrency=4",
+    "still": "remotion still src/index.tsx PromoVideo out/preview.png"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.392",
+    "@remotion/cli": "4.0.392",
+    "@remotion/google-fonts": "4.0.392",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.392"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "@types/react-dom": "19.0.0",
+    "typescript": "5.7.2"
+  }
+}
