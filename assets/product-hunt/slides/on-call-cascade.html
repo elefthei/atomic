@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1270">
+  <title>Atomic — On-call cascade</title>
+  <link rel="stylesheet" href="../_shared/fonts.css">
+  <link rel="stylesheet" href="../_shared/tokens.css">
+  <link rel="stylesheet" href="../_shared/components.css">
+  <link rel="stylesheet" href="../_shared/tui.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1270px; height: 760px; overflow: hidden; }
+
+    /* Warm-tinted shorthand colors used throughout (oklch) */
+    :root {
+      --warm-alarm: oklch(72% 0.18 15);
+      --warm-alarm-bg: oklch(40% 0.10 15 / 0.16);
+      --warm-tint: oklch(82% 0.14 25);
+      --warm-dim: oklch(78% 0.10 25 / 0.85);
+      --hairline: oklch(60% 0.05 220 / 0.18);
+    }
+
+    /* ------------------------------------------------------------
+       Generic mosaic panel — TUI-flavored, editorial restraint
+       ------------------------------------------------------------ */
+    .panel {
+      background: var(--mocha-base);
+      border: 1px solid oklch(60% 0.06 220 / 0.45);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--font-mono);
+      box-shadow: 0 6px 18px oklch(15% 0.05 25 / 0.30);
+    }
+
+    .panel__chrome {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 22px;
+      padding: 0 10px;
+      background: var(--mocha-surface0);
+      font-size: 9.5px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--mocha-subtext0);
+      flex-shrink: 0;
+    }
+
+    .panel__chrome-label {
+      font-weight: 700;
+      color: var(--mocha-text);
+    }
+
+    .panel__chrome-meta {
+      margin-left: auto;
+      color: var(--mocha-overlay0);
+      font-size: 9px;
+    }
+
+    .panel__body {
+      flex: 1;
+      padding: 10px 12px;
+      font-size: 10.5px;
+      line-height: 1.55;
+      color: var(--mocha-subtext0);
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* ------------------------------------------------------------
+       METRICS panel — p95 latency rows + sparkline
+       ------------------------------------------------------------ */
+    .metric-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .metric-row__label { color: var(--mocha-overlay1); font-size: 10px; }
+    .metric-row__value { color: var(--mocha-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .metric-row__value--warn { color: var(--warm-alarm); }
+
+    .sparkline {
+      width: 100%;
+      height: 38px;
+      margin-top: 6px;
+      display: block;
+    }
+
+    /* ------------------------------------------------------------
+       LOGS panel — error stream rows
+       ------------------------------------------------------------ */
+    .log-row {
+      display: grid;
+      grid-template-columns: 56px 32px 1fr 36px;
+      column-gap: 8px;
+      font-size: 10px;
+      line-height: 1.7;
+      white-space: nowrap;
+      align-items: baseline;
+    }
+    .log-row__time  { color: var(--mocha-overlay0); font-variant-numeric: tabular-nums; }
+    .log-row__lvl-err  { color: var(--warm-alarm); font-weight: 700; }
+    .log-row__lvl-warn { color: var(--mocha-yellow); font-weight: 700; }
+    .log-row__msg   { color: var(--mocha-subtext0); overflow: hidden; text-overflow: ellipsis; }
+    .log-row__count { color: var(--mocha-overlay1); text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* ------------------------------------------------------------
+       RUNBOOK panel — vertical step list
+       ------------------------------------------------------------ */
+    .runbook__step {
+      display: grid;
+      grid-template-columns: 26px 18px 1fr;
+      align-items: center;
+      column-gap: 10px;
+      font-size: 11.5px;
+      line-height: 1.4;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .runbook__step:last-child { border-bottom: none; }
+
+    .runbook__step-num  { color: var(--mocha-overlay1); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .runbook__step-icon { font-size: 12px; }
+    .runbook__step-text { color: var(--mocha-subtext0); }
+
+    .runbook__step--done .runbook__step-icon { color: var(--mocha-green); }
+    .runbook__step--done .runbook__step-text { color: var(--mocha-text); }
+
+    /* The missed step — full background tint, no side-stripe (philosophy ban) */
+    .runbook__step--missed {
+      background: var(--warm-alarm-bg);
+      margin: 0 -12px;
+      padding: 8px 12px;
+      border-top: 1px solid oklch(72% 0.18 15 / 0.35);
+      border-bottom: 1px solid oklch(72% 0.18 15 / 0.35);
+    }
+    .runbook__step--missed .runbook__step-icon { color: var(--warm-alarm); }
+    .runbook__step--missed .runbook__step-text { color: var(--warm-tint); font-weight: 600; }
+    .runbook__step--missed .runbook__step-num  { color: oklch(72% 0.16 25); }
+
+    .runbook__step--blocked { opacity: 0.42; }
+    .runbook__step--blocked .runbook__step-icon { color: var(--mocha-overlay0); }
+
+    /* Tiny "skipped" annotation in the missed row */
+    .runbook__step--missed .runbook__step-text::after {
+      content: '— skipped';
+      margin-left: 8px;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--warm-alarm);
+      font-weight: 600;
+    }
+
+    /* ------------------------------------------------------------
+       CODE panel — payments/webhook.ts excerpt
+       ------------------------------------------------------------ */
+    .code__line {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      column-gap: 12px;
+      font-size: 10.5px;
+      line-height: 1.7;
+      color: var(--mocha-subtext0);
+    }
+    .code__line-num { color: var(--mocha-overlay0); text-align: right; font-variant-numeric: tabular-nums; }
+    .code__line--highlight {
+      background: var(--warm-alarm-bg);
+      margin: 0 -12px;
+      padding: 0 12px;
+    }
+    .code__line--highlight .code__line-num { color: oklch(72% 0.16 25); font-weight: 600; }
+
+    .code__kw      { color: var(--mocha-mauve); }
+    .code__fn      { color: var(--mocha-blue); }
+    .code__str     { color: var(--mocha-green); }
+    .code__comment { color: var(--mocha-overlay0); font-style: italic; }
+
+    /* ------------------------------------------------------------
+       EXTERNALS panel — service status rows
+       ------------------------------------------------------------ */
+    .ext-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: baseline;
+      column-gap: 12px;
+      padding: 6px 0;
+      font-size: 11px;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .ext-row:last-child { border-bottom: none; }
+    .ext-row__name   { color: var(--mocha-text); }
+    .ext-row__code   { color: var(--mocha-overlay1); font-variant-numeric: tabular-nums; font-size: 10px; }
+    .ext-row__status { font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .ext-row__status--ok  { color: var(--mocha-green); }
+    .ext-row__status--err { color: var(--warm-alarm); font-weight: 700; }
+
+    /* ------------------------------------------------------------
+       PROD banner — small, restrained, warm-tinted
+       ------------------------------------------------------------ */
+    .prod-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--warm-alarm-bg);
+      border: 1px solid oklch(72% 0.18 15 / 0.55);
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      box-shadow: 0 0 0 1px oklch(72% 0.18 15 / 0.10), 0 6px 18px oklch(20% 0.10 25 / 0.30);
+    }
+    .prod-banner__glyph { color: var(--warm-alarm); font-size: 16px; line-height: 1; }
+    .prod-banner__label { color: var(--mocha-overlay1); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; }
+    .prod-banner__state {
+      color: var(--warm-tint);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-left: auto;
+    }
+
+    /* ------------------------------------------------------------
+       Top breadcrumb
+       ------------------------------------------------------------ */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--warm-dim);
+    }
+    .breadcrumb__dot {
+      color: var(--warm-alarm);
+      font-size: 10px;
+      animation: none;
+    }
+    .breadcrumb__sep { color: var(--mocha-overlay0); }
+
+    /* ------------------------------------------------------------
+       Footer caption — talk-track payoff line
+       ------------------------------------------------------------ */
+    .caption {
+      font-family: var(--font-display);
+      font-size: 26px;
+      line-height: 1.2;
+      font-weight: 500;
+      letter-spacing: -0.014em;
+      color: var(--mocha-text);
+      max-width: 920px;
+    }
+  </style>
+</head>
+<body>
+  <div class="slide">
+
+    <!-- Warm conic sweep — risk / uncontrolled execution pole -->
+    <div class="conic-sweep conic-sweep--warm-anchor"></div>
+
+    <!-- Film grain -->
+    <div class="film-grain"></div>
+
+    <!-- Content layer -->
+    <div class="slide__content" style="padding: 36px 56px 32px; display: flex; flex-direction: column; height: 100%;">
+
+      <!-- Top row: wordmark left · incident breadcrumb right -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;">
+        <div class="wordmark">ATOMIC</div>
+        <div class="breadcrumb">
+          <span class="breadcrumb__dot">●</span>
+          <span>incident response</span>
+          <span class="breadcrumb__sep">·</span>
+          <span>sev-1</span>
+          <span class="breadcrumb__sep">·</span>
+          <span>02:47 utc</span>
+        </div>
+      </div>
+
+      <!-- =========================================================
+           Mosaic — the SRE's workspace at the moment of the miss
+           Three columns:
+             LEFT   metrics (top) + logs (bottom)
+             CENTER runbook (full height)
+             RIGHT  code + externals + prod banner
+           ========================================================= -->
+      <div style="
+        flex: 1;
+        display: grid;
+        grid-template-columns: 320px 1fr 360px;
+        gap: 16px;
+        position: relative;
+        z-index: 2;
+        min-height: 0;
+        margin-bottom: 22px;
+      ">
+
+        <!-- ============== LEFT COLUMN ============== -->
+        <div style="display: grid; grid-template-rows: 168px 1fr; gap: 12px; min-height: 0;">
+
+          <!-- METRICS panel -->
+          <div class="panel">
+            <div class="panel__chrome">
+              <span class="panel__chrome-label">Metrics</span>
+              <span>· p95 latency</span>
+              <span class="panel__chrome-meta">15m</span>
+            </div>
+            <div class="panel__body">
+              <div class="metric-row">
+                <span class="metric-row__label">api.payments</span>
+                <span class="metric-row__value metric-row__value--warn">4.21s ↑</span>
+              </div>
+              <div class="metric-row">
+                <span class="metric-row__label">api.orders</span>
+                <span class="metric-row__value">0.84s</span>
+              </div>
+              <svg class="sparkline" viewBox="0 0 300 38" preserveAspectRatio="none">
+                <polyline fill="none" stroke="oklch(60% 0.06 220 / 0.55)" stroke-width="1"
+                          points="0,30 24,28 48,29 72,27 96,28 120,26 144,24 168,22 192,18 216,12 240,8 264,5 288,3 300,2" />
+                <polyline fill="none" stroke="var(--warm-alarm)" stroke-width="1.4"
+                          points="216,12 240,8 264,5 288,3 300,2" />
+                <circle cx="300" cy="2" r="2.5" fill="var(--warm-alarm)" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- LOGS panel -->
+          <div class="panel" style="min-height: 0;">
+            <div class="panel__chrome">
+              <span class="panel__chrome-label">Logs</span>
+              <span>· error stream</span>
+              <span class="panel__chrome-meta">live</span>
+            </div>
+            <div class="panel__body" style="padding: 8px 12px;">
+              <div class="log-row">
+                <span class="log-row__time">02:47:18</span>
+                <span class="log-row__lvl-err">ERR</span>
+                <span class="log-row__msg">payment.charge → upstream timeout</span>
+                <span class="log-row__count">×347</span>
+              </div>
+              <div class="log-row">
+                <span class="log-row__time">02:46:51</span>
+                <span class="log-row__lvl-err">ERR</span>
+                <span class="log-row__msg">auth.verify → 503 unavailable</span>
+                <span class="log-row__count">×118</span>
+              </div>
+              <div class="log-row">
+                <span class="log-row__time">02:46:09</span>
+                <span class="log-row__lvl-err">ERR</span>
+                <span class="log-row__msg">circuit-breaker tripped</span>
+                <span class="log-row__count">×4</span>
+              </div>
+              <div class="log-row">
+                <span class="log-row__time">02:45:32</span>
+                <span class="log-row__lvl-warn">WRN</span>
+                <span class="log-row__msg">retry budget &lt; 10%</span>
+                <span class="log-row__count">×22</span>
+              </div>
+              <div class="log-row">
+                <span class="log-row__time">02:44:50</span>
+                <span class="log-row__lvl-warn">WRN</span>
+                <span class="log-row__msg">queue depth 8.2k · saturating</span>
+                <span class="log-row__count">×9</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ============== CENTER COLUMN: RUNBOOK ============== -->
+        <div class="panel" style="min-height: 0;">
+          <div class="panel__chrome">
+            <span class="panel__chrome-label">Runbook</span>
+            <span>· payments-degradation.md</span>
+            <span class="panel__chrome-meta">v2.4</span>
+          </div>
+          <div class="panel__body" style="padding: 6px 12px;">
+
+            <div class="runbook__step runbook__step--done">
+              <span class="runbook__step-num">01</span>
+              <span class="runbook__step-icon">✓</span>
+              <span class="runbook__step-text">Acknowledge page · post status update</span>
+            </div>
+            <div class="runbook__step runbook__step--done">
+              <span class="runbook__step-num">02</span>
+              <span class="runbook__step-icon">✓</span>
+              <span class="runbook__step-text">Confirm scope from metrics &amp; logs</span>
+            </div>
+            <div class="runbook__step runbook__step--done">
+              <span class="runbook__step-num">03</span>
+              <span class="runbook__step-icon">✓</span>
+              <span class="runbook__step-text">Check upstream provider status</span>
+            </div>
+
+            <!-- THE MISSED STEP — warm-tinted, no side-stripe -->
+            <div class="runbook__step runbook__step--missed">
+              <span class="runbook__step-num">04</span>
+              <span class="runbook__step-icon">⊘</span>
+              <span class="runbook__step-text">Trip circuit breaker · isolate auth-svc</span>
+            </div>
+
+            <div class="runbook__step runbook__step--blocked">
+              <span class="runbook__step-num">05</span>
+              <span class="runbook__step-icon">○</span>
+              <span class="runbook__step-text">Rollback last deploy if scope &gt; 1 service</span>
+            </div>
+            <div class="runbook__step runbook__step--blocked">
+              <span class="runbook__step-num">06</span>
+              <span class="runbook__step-icon">○</span>
+              <span class="runbook__step-text">Notify dependent teams · open war room</span>
+            </div>
+            <div class="runbook__step runbook__step--blocked">
+              <span class="runbook__step-num">07</span>
+              <span class="runbook__step-icon">○</span>
+              <span class="runbook__step-text">Draft customer comms · update status page</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ============== RIGHT COLUMN ============== -->
+        <div style="display: grid; grid-template-rows: 1fr auto auto; gap: 12px; min-height: 0;">
+
+          <!-- CODE panel -->
+          <div class="panel" style="min-height: 0;">
+            <div class="panel__chrome">
+              <span class="panel__chrome-label">Code</span>
+              <span>· payments/webhook.ts</span>
+              <span class="panel__chrome-meta">L142</span>
+            </div>
+            <div class="panel__body" style="padding: 8px 12px;">
+              <div class="code__line">
+                <span class="code__line-num">140</span>
+                <span><span class="code__kw">async function</span> <span class="code__fn">handleCharge</span>(req) {</span>
+              </div>
+              <div class="code__line">
+                <span class="code__line-num">141</span>
+                <span>  <span class="code__kw">const</span> result = <span class="code__kw">await</span> stripe</span>
+              </div>
+              <div class="code__line code__line--highlight">
+                <span class="code__line-num">142</span>
+                <span>    .charges.create({ amount, source });</span>
+              </div>
+              <div class="code__line">
+                <span class="code__line-num">143</span>
+                <span>  <span class="code__comment">// no retry · no breaker</span></span>
+              </div>
+              <div class="code__line">
+                <span class="code__line-num">144</span>
+                <span>  <span class="code__kw">return</span> result;</span>
+              </div>
+              <div class="code__line">
+                <span class="code__line-num">145</span>
+                <span>}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- EXTERNALS panel -->
+          <div class="panel">
+            <div class="panel__chrome">
+              <span class="panel__chrome-label">Externals</span>
+              <span>· dependencies</span>
+              <span class="panel__chrome-meta">3</span>
+            </div>
+            <div class="panel__body" style="padding: 6px 12px;">
+              <div class="ext-row">
+                <span class="ext-row__name">stripe-api</span>
+                <span class="ext-row__code">200</span>
+                <span class="ext-row__status ext-row__status--ok">ok</span>
+              </div>
+              <div class="ext-row">
+                <span class="ext-row__name">auth-svc</span>
+                <span class="ext-row__code">503</span>
+                <span class="ext-row__status ext-row__status--err">degraded</span>
+              </div>
+              <div class="ext-row">
+                <span class="ext-row__name">twilio</span>
+                <span class="ext-row__code">200</span>
+                <span class="ext-row__status ext-row__status--ok">ok</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PROD banner -->
+          <div class="prod-banner">
+            <span class="prod-banner__glyph">⏻</span>
+            <span class="prod-banner__label">prod · service-mesh</span>
+            <span class="prod-banner__state">degrading</span>
+          </div>
+
+        </div>
+
+      </div>
+      <!-- END mosaic -->
+
+      <!-- Footer caption: the talk-track payoff line, bubble warm on `cascades` -->
+      <p class="caption">
+        One missed step
+        <span class="bubble-text bubble-text--warm" data-text="cascades">cascades</span>
+        to production failure.
+      </p>
+
+    </div>
+  </div>
+</body>
+</html>

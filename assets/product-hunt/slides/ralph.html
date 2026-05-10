@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1270">
+  <title>Atomic — Ralph Workflow</title>
+  <link rel="stylesheet" href="../_shared/fonts.css">
+  <link rel="stylesheet" href="../_shared/tokens.css">
+  <link rel="stylesheet" href="../_shared/components.css">
+  <link rel="stylesheet" href="../_shared/tui.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1270px; height: 760px; overflow: hidden; }
+
+    /* ============================================================
+       Devcontainer wrapper — mirrors deep-research-codebase.html
+       ============================================================ */
+    .dev-panel-outer {
+      border: 1.5px solid oklch(70% 0.20 215 / 0.80);
+      border-radius: 10px;
+      background: var(--mocha-base);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 0 1px oklch(70% 0.20 215 / 0.18), 0 16px 40px oklch(15% 0.05 220 / 0.45);
+    }
+
+    .dev-panel-header {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 12px;
+      background-color: oklch(20% 0.04 215 / 0.92);
+      border-bottom: 1px solid oklch(70% 0.20 215 / 0.14);
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+    }
+
+    .dev-panel-header__lhs {
+      color: var(--cool-sapphire);
+      font-weight: 700;
+    }
+
+    .dev-panel-body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ============================================================
+       Authentic Atomic TUI — graph view (mirrors session-graph-panel.tsx)
+       ============================================================ */
+    .atui {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--font-mono);
+      background-color: var(--mocha-base);
+      color: var(--mocha-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .atui__header {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      padding-right: 10px;
+    }
+
+    .atui__header-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__header-session {
+      margin-left: 9px;
+      color: var(--mocha-text);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .atui__header-session-dim {
+      color: var(--mocha-overlay1);
+    }
+
+    .atui__header-iter {
+      margin-left: 14px;
+      color: var(--mocha-overlay1);
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+    }
+
+    .atui__header-iter strong {
+      color: var(--mocha-yellow);
+      font-weight: 600;
+    }
+
+    .atui__header-counts {
+      margin-left: auto;
+      display: flex;
+      flex-direction: row;
+      gap: 11px;
+      font-size: 11px;
+    }
+
+    .atui__count {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* --- Graph canvas --- */
+    .atui__canvas {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background-color: var(--mocha-base);
+    }
+
+    .atui__edge {
+      position: absolute;
+      background-color: var(--mocha-overlay0);
+      pointer-events: none;
+    }
+    .atui__edge--vertical { width: 1px; }
+    .atui__edge--horizontal { height: 1px; }
+    .atui__edge--active {
+      background-color: oklch(86% 0.13 90 / 0.65);
+    }
+    .atui__edge--complete {
+      background-color: oklch(75% 0.16 145 / 0.55);
+    }
+
+    .atui__nodes {
+      position: absolute;
+      inset: 0;
+    }
+
+    .atui__node {
+      position: absolute;
+      width: 158px;
+      height: 56px;
+      border-radius: 6px;
+      border: 1px solid var(--mocha-overlay0);
+      background-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translate(-50%, -50%);
+      font-size: 11px;
+    }
+
+    .atui__node-title {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0 7px;
+      background-color: var(--mocha-base);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--mocha-subtext0);
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+
+    .atui__node-body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      line-height: 1.2;
+    }
+
+    .atui__node-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .atui__node-duration {
+      font-size: 10.5px;
+      color: var(--mocha-overlay1);
+    }
+
+    .atui__node--complete {
+      border-color: var(--mocha-green);
+    }
+    .atui__node--complete .atui__node-title,
+    .atui__node--complete .atui__node-status {
+      color: var(--mocha-green);
+    }
+
+    .atui__node--running {
+      border-color: var(--mocha-yellow);
+      background-color: oklch(35% 0.08 90 / 0.06);
+    }
+    .atui__node--running .atui__node-title,
+    .atui__node--running .atui__node-status {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__node--running.atui__node--focused {
+      border-color: oklch(82% 0.16 90);
+      background-color: oklch(35% 0.10 90 / 0.14);
+      box-shadow: 0 0 0 1px oklch(82% 0.16 90 / 0.45);
+    }
+
+    /* --- Loop arc on the right side: review → next plan ----------- */
+    .atui__loop-arc {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .atui__loop-label {
+      position: absolute;
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: oklch(82% 0.10 30 / 0.85);
+      background: var(--mocha-base);
+      padding: 1px 5px;
+      white-space: nowrap;
+    }
+
+    /* --- Statusbar (mirrors statusline.tsx) --- */
+    .atui__statusbar {
+      display: flex;
+      align-items: center;
+      height: 22px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      font-size: 10.5px;
+      padding-right: 10px;
+    }
+
+    .atui__statusbar-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__statusbar-bg {
+      margin-left: 9px;
+      color: var(--mocha-overlay1);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .atui__statusbar-bg-icon {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__statusbar-hints {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .atui__hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .atui__hint + .atui__hint::before {
+      content: '·';
+      color: var(--mocha-overlay0);
+      padding: 0 6px;
+    }
+
+    .atui__hint-key {
+      color: var(--mocha-text);
+    }
+
+    .atui__hint-label {
+      color: var(--mocha-subtext0);
+    }
+  </style>
+</head>
+<body>
+  <div class="slide">
+
+    <!-- Warm conic sweep backdrop (sibling-but-distinct from deep-research-codebase.png) -->
+    <div class="conic-sweep conic-sweep--warm-anchor"></div>
+
+    <!-- Film grain -->
+    <div class="film-grain"></div>
+
+    <!-- Content layer -->
+    <div class="slide__content" style="padding: 32px 56px 24px; display: flex; flex-direction: column;">
+
+      <!-- Top row: wordmark -->
+      <div style="display: flex; align-items: center; margin-bottom: 14px;">
+        <div class="wordmark">ATOMIC</div>
+      </div>
+
+      <!-- Headline: "Loop until correct." — bubble on "Loop" -->
+      <h1 style="
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 56px;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        color: var(--mocha-text);
+        margin-bottom: 10px;
+        position: relative;
+        z-index: 2;
+        max-width: 920px;
+      ">
+        <span
+          class="bubble-text bubble-text--warm"
+          data-text="Loop"
+        >Loop</span>
+        until correct.
+      </h1>
+
+
+      <!-- SINGLE-PANEL DIAGRAM (devcontainer + ralph TUI) -->
+      <div style="
+        flex: 1;
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        justify-content: center;
+        gap: 0;
+        position: relative;
+        z-index: 2;
+        min-height: 0;
+      ">
+
+        <div style="
+          flex: 0 1 880px;
+          width: 880px;
+          max-width: 880px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-width: 0;
+        ">
+          <!-- Panel header row -->
+          <div style="display: flex; align-items: center; gap: 10px; padding-bottom: 4px;">
+            <span style="
+              font-family: var(--font-mono);
+              font-size: 12px;
+              font-weight: 700;
+              letter-spacing: 0.06em;
+              text-transform: uppercase;
+              color: var(--cool-sapphire);
+            ">Devcontainer boundary</span>
+          </div>
+
+          <!-- Devcontainer boundary — wraps the authentic Atomic TUI -->
+          <div class="dev-panel-outer" style="flex: 1; min-height: 0;">
+            <div class="dev-panel-header">
+              <span class="dev-panel-header__lhs">devcontainer: ubuntu-22.04</span>
+            </div>
+
+            <div class="dev-panel-body">
+              <!-- ============================================================
+                   Authentic Atomic TUI — ralph session graph
+                   visible chain: planner-2 → orchestrator-2
+                   headless background: infra discovery × 3 + reviewers × 2
+                   loop arc: review findings re-feed planner (next iter)
+                   ============================================================ -->
+              <div class="atui">
+
+                <div class="atui__header">
+                  <div class="atui__header-badge"> Orchestrator </div>
+                  <span class="atui__header-session">
+                    ralph
+                    <span class="atui__header-session-dim"> · claude</span>
+                  </span>
+                  <span class="atui__header-iter">
+                    iter <strong>2</strong> / 10
+                  </span>
+                  <div class="atui__header-counts">
+                    <span class="atui__count"><span style="color: var(--mocha-green);">✓</span><span style="color: var(--mocha-overlay1);">3</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-yellow);">●</span><span style="color: var(--mocha-overlay1);">1</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-blue);">?</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-overlay1);">○</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-red);">✗</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                  </div>
+                </div>
+
+                <div class="atui__canvas">
+
+                  <!-- Trunk segments — planner-2 → orchestrator-2 → code-simplifier-2 → reviewer-2.
+                       Node centers: y=58, y=140, y=222, y=304 (gap 82, h=56). -->
+                  <div class="atui__edge atui__edge--vertical atui__edge--complete"
+                       style="left: calc(50% - 0.5px); top: 86px; height: 26px;"></div>
+                  <div class="atui__edge atui__edge--vertical atui__edge--complete"
+                       style="left: calc(50% - 0.5px); top: 168px; height: 26px;"></div>
+                  <div class="atui__edge atui__edge--vertical atui__edge--active"
+                       style="left: calc(50% - 0.5px); top: 250px; height: 26px;"></div>
+
+                  <!-- Loop arc — runs along the right side of the canvas, returning
+                       reviewer findings (bottom) up to the planner input (top).
+                       Drawn as an SVG path so the bend reads cleanly at print scale. -->
+                  <svg class="atui__loop-arc"
+                       width="170" height="310"
+                       viewBox="0 0 170 310"
+                       style="right: 28px; top: 12px;">
+                    <defs>
+                      <marker id="loopArrow" viewBox="0 0 10 10"
+                              refX="8" refY="5"
+                              markerWidth="7" markerHeight="7"
+                              orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z"
+                              fill="oklch(82% 0.10 30 / 0.85)" />
+                      </marker>
+                    </defs>
+                    <!-- bottom (reviewer-2) → up the right gutter → back into planner top.
+                         svg y = canvas y − 12.  reviewer center canvas 304 → svg 292.
+                                                planner center canvas 58  → svg 46. -->
+                    <path
+                      d="M 10 292
+                         C 150 292, 160 190, 160 160
+                         C 160 80, 150 46, 10 46"
+                      fill="none"
+                      stroke="oklch(82% 0.10 30 / 0.85)"
+                      stroke-width="1.2"
+                      stroke-dasharray="3 3"
+                      marker-end="url(#loopArrow)" />
+                  </svg>
+
+                  <!-- Loop label, sits over the arc midline -->
+                  <div class="atui__loop-label"
+                       style="right: 16px; top: 168px;">
+                    findings → re-plan
+                  </div>
+
+                  <!-- Node layer -->
+                  <div class="atui__nodes">
+
+                    <!-- planner-2: re-planned from iter-1 review findings -->
+                    <div class="atui__node atui__node--complete"
+                         style="left: 50%; top: 58px;">
+                      <span class="atui__node-title">planner-2</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">✓ complete</span>
+                        <span class="atui__node-duration">1:38</span>
+                      </div>
+                    </div>
+
+                    <!-- orchestrator-2: finished executing the revised task list -->
+                    <div class="atui__node atui__node--complete"
+                         style="left: 50%; top: 140px;">
+                      <span class="atui__node-title">orchestrator-2</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">✓ complete</span>
+                        <span class="atui__node-duration">3:12</span>
+                      </div>
+                    </div>
+
+                    <!-- code-simplifier-2: refactor pass before review -->
+                    <div class="atui__node atui__node--complete"
+                         style="left: 50%; top: 222px;">
+                      <span class="atui__node-title">code-simplifier-2</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">✓ complete</span>
+                        <span class="atui__node-duration">0:48</span>
+                      </div>
+                    </div>
+
+                    <!-- reviewer-2: two parallel headless reviewers running now -->
+                    <div class="atui__node atui__node--running atui__node--focused"
+                         style="left: 50%; top: 304px;">
+                      <span class="atui__node-title">reviewer-2</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">⠿ running</span>
+                        <span class="atui__node-duration">0:21</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <!-- Background section: parallel headless sub-agents for this iter
+                       + the iter-1 review summary that drove the re-plan. -->
+                  <div style="
+                    position: absolute;
+                    left: 28px;
+                    right: 28px;
+                    top: 350px;
+                    font-family: var(--font-mono);
+                    font-size: 10.5px;
+                    line-height: 1.55;
+                    color: var(--mocha-subtext0);
+                  ">
+                    <!-- Section header -->
+                    <div style="
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      color: var(--mocha-overlay1);
+                      letter-spacing: 0.06em;
+                      text-transform: uppercase;
+                      font-size: 9.5px;
+                      margin-bottom: 6px;
+                    ">
+                      <span style="flex: 0 0 14px; height: 1px; background: var(--mocha-overlay0);"></span>
+                      <span>background · headless</span>
+                      <span style="flex: 1; height: 1px; background: var(--mocha-overlay0);"></span>
+                      <span style="color: var(--mocha-overlay0);">5 sessions</span>
+                    </div>
+
+                    <!-- Specialist rows -->
+                    <div style="display: grid; grid-template-columns: 14px 1fr auto auto; column-gap: 10px; row-gap: 1px;">
+
+                      <span style="color: var(--mocha-green);">✓</span>
+                      <span style="color: var(--mocha-text);">infra-locate-2</span>
+                      <span style="color: var(--mocha-overlay1);">codebase-locator</span>
+                      <span style="color: var(--mocha-green);">complete</span>
+
+                      <span style="color: var(--mocha-green);">✓</span>
+                      <span style="color: var(--mocha-text);">infra-analyze-2</span>
+                      <span style="color: var(--mocha-overlay1);">codebase-analyzer</span>
+                      <span style="color: var(--mocha-green);">complete</span>
+
+                      <span style="color: var(--mocha-green);">✓</span>
+                      <span style="color: var(--mocha-text);">infra-patterns-2</span>
+                      <span style="color: var(--mocha-overlay1);">codebase-pattern-finder</span>
+                      <span style="color: var(--mocha-green);">complete</span>
+
+                      <span style="color: var(--mocha-yellow);">⠹</span>
+                      <span style="color: var(--mocha-text);">reviewer-2-a</span>
+                      <span style="color: var(--mocha-overlay1);">json_schema · structured</span>
+                      <span style="color: var(--mocha-yellow);">running</span>
+
+                      <span style="color: var(--mocha-yellow);">⠼</span>
+                      <span style="color: var(--mocha-text);">reviewer-2-b</span>
+                      <span style="color: var(--mocha-overlay1);">json_schema · structured</span>
+                      <span style="color: var(--mocha-yellow);">running</span>
+
+                    </div>
+
+                    <!-- Iter-1 result line — the input that re-fed the planner -->
+                    <div style="
+                      margin-top: 10px;
+                      padding-top: 8px;
+                      border-top: 1px dashed var(--mocha-overlay0);
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      font-size: 10px;
+                      color: var(--mocha-overlay1);
+                    ">
+                      <span style="color: var(--mocha-green);">✓</span>
+                      <span style="color: var(--mocha-subtext0);">iter 1 reviewers</span>
+                      <span>2/2 returned</span>
+                      <span style="color: var(--mocha-overlay0);">·</span>
+                      <span style="color: oklch(82% 0.10 30 / 0.95);">"patch is incorrect" · 3 actionable findings</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Statusbar -->
+                <div class="atui__statusbar">
+                  <div class="atui__statusbar-badge">GRAPH</div>
+                  <span class="atui__statusbar-bg">
+                    <span class="atui__statusbar-bg-icon">◆</span>
+                    <span>5 background</span>
+                  </span>
+                  <div class="atui__statusbar-hints">
+                    <span class="atui__hint">
+                      <span class="atui__hint-key" style="letter-spacing: 0.12em;">↑↓←→</span>
+                      <span class="atui__hint-label">navigate</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">↵</span>
+                      <span class="atui__hint-label">attach</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">/</span>
+                      <span class="atui__hint-label">stages</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">ctrl+b d</span>
+                      <span class="atui__hint-label">detach</span>
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <!-- END DIAGRAM -->
+
+
+    </div>
+  </div>
+</body>
+</html>

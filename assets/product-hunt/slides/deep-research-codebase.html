@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1270">
+  <title>Atomic — Deep Research Codebase Workflow</title>
+  <link rel="stylesheet" href="../_shared/fonts.css">
+  <link rel="stylesheet" href="../_shared/tokens.css">
+  <link rel="stylesheet" href="../_shared/components.css">
+  <link rel="stylesheet" href="../_shared/tui.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 1270px; height: 760px; overflow: hidden; }
+
+    /* Sub-labels beneath panel headers */
+    .panel-sublabel {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-on-gradient-dim);
+      padding: 2px 6px;
+      line-height: 1.4;
+    }
+
+    .panel-sublabel + .panel-sublabel {
+      padding-top: 0;
+    }
+
+    /* Mauve transition band */
+    .mauve-band {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 70px;
+      z-index: 1;
+      pointer-events: none;
+      background: linear-gradient(
+        to right,
+        transparent 0%,
+        oklch(70% 0.14 300 / 0.14) 20%,
+        oklch(72% 0.17 300 / 0.26) 50%,
+        oklch(70% 0.14 300 / 0.14) 80%,
+        transparent 100%
+      );
+      filter: blur(8px);
+    }
+
+    /* Arrow + label in the mauve zone */
+    .isolate-arrow {
+      position: absolute;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .isolate-arrow__glyph {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      color: var(--bridge-mauve);
+      line-height: 1;
+    }
+
+    .isolate-arrow__label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--mocha-mauve);
+    }
+
+    /* Host panel TUI pane mock — warm-tinted text */
+    .host-pane {
+      background-color: var(--mocha-crust);
+      border-radius: 8px;
+      border: 1px solid oklch(65% 0.15 10 / 0.55);  /* warm-maroon 1px all-around */
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .host-pane__titlebar {
+      display: flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 12px;
+      background-color: oklch(22% 0.06 10 / 0.70);
+      border-bottom: 1px solid oklch(65% 0.15 10 / 0.40);
+      gap: 8px;
+    }
+
+    .host-pane__dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .host-pane__dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+    }
+
+    .host-pane__title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: oklch(78% 0.10 10);   /* warm-tinted text */
+      letter-spacing: 0.04em;
+      flex: 1;
+      text-align: center;
+      margin-right: 23px;
+    }
+
+    .host-pane__body {
+      flex: 1;
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.7;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* ============================================================
+       Devcontainer wrapper — single sapphire boundary (no duplicate chrome)
+       Holds the authentic Atomic TUI graph view inside.
+       ============================================================ */
+    .dev-panel-outer {
+      border: 1.5px solid oklch(70% 0.20 215 / 0.80);
+      border-radius: 10px;
+      background: var(--mocha-base);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 0 1px oklch(70% 0.20 215 / 0.18), 0 16px 40px oklch(15% 0.05 220 / 0.45);
+    }
+
+    /* Single header strip: states the boundary in one line, no inner banner duplicate */
+    .dev-panel-header {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 12px;
+      background-color: oklch(20% 0.04 215 / 0.92);
+      border-bottom: 1px solid oklch(70% 0.20 215 / 0.14);
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+    }
+
+    .dev-panel-header__lhs {
+      color: var(--cool-sapphire);
+      font-weight: 700;
+    }
+
+    .dev-panel-header__sep {
+      color: var(--mocha-overlay0);
+    }
+
+    .dev-panel-header__detail {
+      color: var(--mocha-subtext0);
+    }
+
+    .dev-panel-header__guarantee {
+      margin-left: auto;
+      color: var(--mocha-overlay0);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 9.5px;
+    }
+
+    .dev-panel-header__guarantee-icon {
+      color: var(--cool-sapphire);
+      margin-right: 4px;
+    }
+
+    .dev-panel-body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ============================================================
+       Authentic Atomic TUI — graph view (mirrors session-graph-panel.tsx)
+       Header (orchestrator badge + counts) | graph canvas | GRAPH statusbar
+       ============================================================ */
+    .atui {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--font-mono);
+      background-color: var(--mocha-base);
+      color: var(--mocha-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* --- Header bar (mirrors header.tsx) --- */
+    .atui__header {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      padding-right: 10px;
+    }
+
+    .atui__header-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__header-session {
+      margin-left: 9px;
+      color: var(--mocha-text);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .atui__header-session-dim {
+      color: var(--mocha-overlay1);
+    }
+
+    .atui__header-counts {
+      margin-left: auto;
+      display: flex;
+      flex-direction: row;
+      gap: 11px;
+      font-size: 11px;
+    }
+
+    .atui__count {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* --- Graph canvas --- */
+    .atui__canvas {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background-color: var(--mocha-base);
+      /* subtle vignette only — no decoration grids */
+    }
+
+    /* Tree connectors — pixel-positioned in the same coord system as nodes
+       so edges meet node borders cleanly. */
+    .atui__edge {
+      position: absolute;
+      background-color: var(--mocha-overlay0);
+      pointer-events: none;
+    }
+    .atui__edge--vertical { width: 1px; }
+    .atui__edge--horizontal { height: 1px; }
+
+    /* Active edges follow the running children (warm yellow, slightly soft) */
+    .atui__edge--active {
+      background-color: oklch(86% 0.13 90 / 0.65);
+    }
+
+    /* Node positioning layer */
+    .atui__nodes {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Single node card (mirrors node-card.tsx — rounded border + floating title) */
+    .atui__node {
+      position: absolute;
+      width: 158px;
+      height: 56px;
+      border-radius: 6px;
+      border: 1px solid var(--mocha-overlay0);
+      background-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translate(-50%, -50%);
+      font-size: 11px;
+    }
+
+    .atui__node-title {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0 7px;
+      background-color: var(--mocha-base);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--mocha-subtext0);
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+
+    .atui__node-body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      line-height: 1.2;
+    }
+
+    .atui__node-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .atui__node-duration {
+      font-size: 10.5px;
+      color: var(--mocha-overlay1);
+    }
+
+    /* Status variants — match the real status-color mapping */
+    .atui__node--complete {
+      border-color: var(--mocha-green);
+    }
+    .atui__node--complete .atui__node-title {
+      color: var(--mocha-green);
+    }
+    .atui__node--complete .atui__node-status {
+      color: var(--mocha-green);
+    }
+
+    .atui__node--running {
+      border-color: var(--mocha-yellow);
+      background-color: oklch(35% 0.08 90 / 0.06);
+    }
+    .atui__node--running .atui__node-title {
+      color: var(--mocha-yellow);
+    }
+    .atui__node--running .atui__node-status {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__node--running.atui__node--focused {
+      border-color: oklch(82% 0.16 90);
+      background-color: oklch(35% 0.10 90 / 0.14);
+      box-shadow: 0 0 0 1px oklch(82% 0.16 90 / 0.45);
+    }
+
+    .atui__node--pending {
+      border-color: var(--mocha-overlay0);
+    }
+    .atui__node--pending .atui__node-title,
+    .atui__node--pending .atui__node-status {
+      color: var(--mocha-overlay0);
+    }
+
+    /* HIL — agent paused, waiting for human response (sapphire/blue) */
+    .atui__node--hil {
+      border-color: var(--mocha-blue);
+      background-color: oklch(60% 0.18 240 / 0.07);
+    }
+    .atui__node--hil .atui__node-title {
+      color: var(--mocha-blue);
+    }
+    .atui__node--hil .atui__node-status {
+      color: var(--mocha-blue);
+    }
+    .atui__node--hil .atui__node-duration {
+      color: oklch(72% 0.10 240 / 0.85);
+    }
+
+    /* Edge variant — blue to mark the HIL branch */
+    .atui__edge--hil {
+      background-color: oklch(75% 0.13 240 / 0.70);
+    }
+
+    /* --- Statusbar (mirrors statusline.tsx) --- */
+    .atui__statusbar {
+      display: flex;
+      align-items: center;
+      height: 22px;
+      background-color: var(--mocha-surface0);
+      flex-shrink: 0;
+      font-size: 10.5px;
+      padding-right: 10px;
+    }
+
+    .atui__statusbar-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 9px;
+      background-color: var(--mocha-blue);
+      color: var(--mocha-surface0);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.02em;
+    }
+
+    .atui__statusbar-bg {
+      margin-left: 9px;
+      color: var(--mocha-overlay1);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .atui__statusbar-bg-icon {
+      color: var(--mocha-yellow);
+    }
+
+    .atui__statusbar-hints {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .atui__hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .atui__hint + .atui__hint::before {
+      content: '·';
+      color: var(--mocha-overlay0);
+      padding: 0 6px;
+    }
+
+    .atui__hint-key {
+      color: var(--mocha-text);
+    }
+
+    .atui__hint-label {
+      color: var(--mocha-subtext0);
+    }
+  </style>
+</head>
+<body>
+  <div class="slide">
+
+    <!-- Cool conic sweep backdrop — deeper saturation -->
+    <div class="conic-sweep conic-sweep--cool-anchor"></div>
+
+    <!-- Film grain -->
+    <div class="film-grain"></div>
+
+    <!-- Content layer -->
+    <div class="slide__content" style="padding: 44px 56px 36px; display: flex; flex-direction: column;">
+
+      <!-- Top row: wordmark -->
+      <div style="display: flex; align-items: center; margin-bottom: 22px;">
+        <div class="wordmark">ATOMIC</div>
+      </div>
+
+      <!-- Headline: "Deep research codebase." -->
+      <h1 style="
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 64px;
+        line-height: 1.08;
+        letter-spacing: -0.025em;
+        color: var(--mocha-text);
+        margin-bottom: 14px;
+        position: relative;
+        z-index: 2;
+        max-width: 920px;
+      ">
+        Deep
+        <span
+          class="bubble-text bubble-text--warm"
+          data-text="research"
+        >research</span>
+        codebase.
+      </h1>
+
+
+      <!-- SINGLE-PANEL DIAGRAM (devcontainer only) -->
+      <div style="
+        flex: 1;
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        justify-content: center;
+        gap: 0;
+        position: relative;
+        z-index: 2;
+        min-height: 0;
+      ">
+
+        <!-- ================================================================
+             SOLE PANEL: Devcontainer boundary — constrained width so the
+             terminal reads as a natural ~1.6:1 screen rather than a banner.
+             ================================================================ -->
+        <div style="
+          flex: 0 1 880px;
+          width: 880px;
+          max-width: 880px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-width: 0;
+        ">
+          <!-- Panel header row -->
+          <div style="display: flex; align-items: center; gap: 10px; padding-bottom: 4px;">
+            <span style="
+              font-family: var(--font-mono);
+              font-size: 12px;
+              font-weight: 700;
+              letter-spacing: 0.06em;
+              text-transform: uppercase;
+              color: var(--cool-sapphire);
+            ">Devcontainer boundary</span>
+          </div>
+
+          <!-- Devcontainer boundary — single chrome strip wraps the authentic Atomic TUI -->
+          <div class="dev-panel-outer" style="flex: 1; min-height: 0;">
+            <div class="dev-panel-header">
+              <span class="dev-panel-header__lhs">devcontainer: ubuntu-22.04</span>
+            </div>
+
+            <div class="dev-panel-body">
+              <!-- ============================================================
+                   Authentic Atomic TUI — session graph view
+                   Mirrors src/sdk/components/header.tsx,
+                          src/sdk/components/session-graph-panel.tsx,
+                          src/sdk/components/node-card.tsx,
+                          src/sdk/components/statusline.tsx
+                   ============================================================ -->
+              <div class="atui">
+
+                <!-- Header: Orchestrator (running) badge · session · 5 status counters -->
+                <div class="atui__header">
+                  <div class="atui__header-badge"> Orchestrator </div>
+                  <span class="atui__header-session">
+                    deep-research-codebase
+                    <span class="atui__header-session-dim"> · claude</span>
+                  </span>
+                  <div class="atui__header-counts">
+                    <span class="atui__count"><span style="color: var(--mocha-green);">✓</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-yellow);">●</span><span style="color: var(--mocha-overlay1);">2</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-blue);">?</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-overlay1);">○</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                    <span class="atui__count"><span style="color: var(--mocha-red);">✗</span><span style="color: var(--mocha-overlay1);">0</span></span>
+                  </div>
+                </div>
+
+                <!-- Graph canvas: orchestrator → codebase-scout (single visible chain).
+                     The 4 explorer specialists + the history pipeline run as headless
+                     background tasks (see helpers/batching.ts for the SUBAGENT_TYPE map),
+                     so they're listed below the graph as a "background · specialists"
+                     panel rather than as visible nodes. -->
+                <div class="atui__canvas">
+
+                  <!-- Trunk: orchestrator bottom (center y=80, h=56 → bottom 108)
+                       → codebase-scout top (center y=180, h=56 → top 152) -->
+                  <div class="atui__edge atui__edge--vertical atui__edge--active"
+                       style="left: calc(50% - 0.5px); top: 108px; height: 44px;"></div>
+
+                  <!-- Node layer -->
+                  <div class="atui__nodes">
+
+                    <!-- Orchestrator: running, waiting on scout + background fan-out -->
+                    <div class="atui__node atui__node--running"
+                         style="left: 50%; top: 80px;">
+                      <span class="atui__node-title">orchestrator</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">⠿ running</span>
+                        <span class="atui__node-duration">2:14</span>
+                      </div>
+                    </div>
+
+                    <!-- codebase-scout: running, focused (visible single child) -->
+                    <div class="atui__node atui__node--running atui__node--focused"
+                         style="left: 50%; top: 180px;">
+                      <span class="atui__node-title">codebase-scout</span>
+                      <div class="atui__node-body">
+                        <span class="atui__node-status">⠸ running</span>
+                        <span class="atui__node-duration">0:42</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <!-- Background · specialists list. Sits underneath the visible chain
+                       inside the same canvas, mirroring how the real TUI surfaces
+                       headless wave-batch sessions in a "background tasks" pane. -->
+                  <div style="
+                    position: absolute;
+                    left: 28px;
+                    right: 28px;
+                    top: 232px;
+                    font-family: var(--font-mono);
+                    font-size: 10.5px;
+                    line-height: 1.55;
+                    color: var(--mocha-subtext0);
+                  ">
+                    <!-- Section header: divider + label -->
+                    <div style="
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      color: var(--mocha-overlay1);
+                      letter-spacing: 0.06em;
+                      text-transform: uppercase;
+                      font-size: 9.5px;
+                      margin-bottom: 6px;
+                    ">
+                      <span style="flex: 0 0 14px; height: 1px; background: var(--mocha-overlay0);"></span>
+                      <span>background · specialists</span>
+                      <span style="flex: 1; height: 1px; background: var(--mocha-overlay0);"></span>
+                      <span style="color: var(--mocha-overlay0);">8 sessions</span>
+                    </div>
+
+                    <!-- Specialist rows: spinner · agent name · phase · partitions · status -->
+                    <div style="display: grid; grid-template-columns: 14px 1fr auto auto; column-gap: 10px; row-gap: 1px;">
+
+                      <span style="color: var(--mocha-yellow);">⠋</span>
+                      <span style="color: var(--mocha-text);">codebase-locator</span>
+                      <span style="color: var(--mocha-overlay1);">wave 1 · 6 tasks</span>
+                      <span style="color: var(--mocha-yellow);">running</span>
+
+                      <span style="color: var(--mocha-yellow);">⠙</span>
+                      <span style="color: var(--mocha-text);">codebase-pattern-finder</span>
+                      <span style="color: var(--mocha-overlay1);">wave 1 · 6 tasks</span>
+                      <span style="color: var(--mocha-yellow);">running</span>
+
+                      <span style="color: var(--mocha-yellow);">⠹</span>
+                      <span style="color: var(--mocha-text);">codebase-analyzer</span>
+                      <span style="color: var(--mocha-overlay1);">wave 2 · 6 tasks</span>
+                      <span style="color: var(--mocha-yellow);">running</span>
+
+                      <span style="color: var(--mocha-yellow);">⠸</span>
+                      <span style="color: var(--mocha-text);">codebase-online-researcher</span>
+                      <span style="color: var(--mocha-overlay1);">wave 2 · 6 tasks</span>
+                      <span style="color: var(--mocha-yellow);">running</span>
+
+                      <span style="color: var(--mocha-yellow);">⠼</span>
+                      <span style="color: var(--mocha-text);">codebase-research-locator</span>
+                      <span style="color: var(--mocha-overlay1);">history · 1 task</span>
+                      <span style="color: var(--mocha-yellow);">running</span>
+
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Statusbar: GRAPH badge + nav hints (mirrors statusline.tsx) -->
+                <div class="atui__statusbar">
+                  <div class="atui__statusbar-badge">GRAPH</div>
+                  <span class="atui__statusbar-bg">
+                    <span class="atui__statusbar-bg-icon">◆</span>
+                    <span>8 background</span>
+                  </span>
+                  <div class="atui__statusbar-hints">
+                    <span class="atui__hint">
+                      <span class="atui__hint-key" style="letter-spacing: 0.12em;">↑↓←→</span>
+                      <span class="atui__hint-label">navigate</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">↵</span>
+                      <span class="atui__hint-label">attach</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">/</span>
+                      <span class="atui__hint-label">stages</span>
+                    </span>
+                    <span class="atui__hint">
+                      <span class="atui__hint-key">ctrl+b d</span>
+                      <span class="atui__hint-label">detach</span>
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <!-- END TWO-PANEL DIAGRAM -->
+
+
+    </div>
+  </div>
+</body>
+</html>
