@@ -174,8 +174,29 @@ for (const url of urls) {
   try {
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await sleep(rand(3000, 8000));
-    await page.evaluate(() => window.scrollBy(0, 250 + Math.random() * 250));
-    await sleep(rand(1500, 3500));
+
+    // Progressive scroll to the bottom so lazy-loaded sections (Experience,
+    // Education) render before extraction — without these, "advisor at X" can
+    // be mistaken for the primary employer. Chunked with jittered pauses to
+    // trigger LinkedIn's intersection observers and look human.
+    //
+    // We deliberately do NOT scroll back to the top. Once the page is
+    // scrolled past the cover photo, LinkedIn activates a sticky header with
+    // a duplicate "Connect" button — clicking that one does not open the
+    // standard invite modal. The Connect click below uses a `.pv-top-card`-
+    // scoped locator and Playwright auto-scrolls the target into view, so
+    // there is no need to manually scroll up.
+    let lastHeight = 0;
+    for (let i = 0; i < 12; i++) {
+      const height = await page.evaluate(() => {
+        window.scrollBy(0, 600 + Math.random() * 400);
+        return document.body.scrollHeight;
+      });
+      await sleep(rand(400, 900));
+      if (height === lastHeight) break;
+      lastHeight = height;
+    }
+    await sleep(rand(1000, 2000));
 
     const extracted = await stagehand.extract(
       [
@@ -206,11 +227,47 @@ for (const url of urls) {
         .replaceAll("[name]", extracted.name)
         .replaceAll("[company name]", extracted.company);
 
-      const connectActions = await stagehand.observe(
-        "find the visible 'Connect' button on this profile to send a connection request. Do not pick 'Follow' or 'Message'. If 'Connect' is hidden behind a 'More' button, return the action that opens the More menu instead.",
-      );
+      // Click the profile-card Connect button via a scoped Playwright
+      // locator instead of stagehand.observe(). Two reasons:
+      //   1. After the deep scroll above, LinkedIn renders a sticky header
+      //      with a duplicate Connect button. observe()'s a11y snapshot
+      //      sees both, the LLM picks one nondeterministically, and the
+      //      sticky-header click does NOT open div[role="dialog"].
+      //   2. The button is structurally stable enough that an LLM round-
+      //      trip per profile is wasted cost.
+      // Scoping by `.pv-top-card` excludes the sticky-header dup. The role
+      // + accessible-name regex covers both LinkedIn variants:
+      // text "Connect" (older) and aria-label "Invite <name> to connect"
+      // (current).
+      const profileCard = page.locator(".pv-top-card");
+      const connectBtn = profileCard.getByRole("button", {
+        name: /^(Connect|Invite\s.+\sto\s+connect)$/i,
+      });
+      const moreBtn = profileCard.getByRole("button", {
+        name: /^More(\s+actions)?(\s+for\s+.+)?$/i,
+      });
 
-      if (connectActions.length === 0) {
+      let connectClicked = false;
+      try {
+        await connectBtn.first().click({ timeout: 3000 });
+        connectClicked = true;
+      } catch {
+        try {
+          await moreBtn.first().click({ timeout: 3000 });
+          await sleep(rand(800, 1500));
+          await page
+            .getByRole("menuitem", {
+              name: /^(Connect|Invite\s.+\sto\s+connect)$/i,
+            })
+            .first()
+            .click({ timeout: 3000 });
+          connectClicked = true;
+        } catch {
+          // Neither direct nor More-menu path matched — fall through to skip.
+        }
+      }
+
+      if (!connectClicked) {
         log({
           url,
           status: "skip",
@@ -219,16 +276,7 @@ for (const url of urls) {
           company: extracted.company,
         });
       } else {
-        await stagehand.act(connectActions[0]);
         await sleep(rand(1500, 2500));
-
-        const inMoreMenu = await stagehand.observe(
-          "find the 'Connect' menu item in the currently open dropdown menu",
-        );
-        if (inMoreMenu.length > 0) {
-          await stagehand.act(inMoreMenu[0]);
-          await sleep(rand(1500, 2500));
-        }
 
         // Wait for the invitation dialog to actually be in the DOM before
         // acting. Without this, act() can race the modal animation and miss

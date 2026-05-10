@@ -1,5 +1,12 @@
 {
   "scm": "github",
   "version": 1,
-  "$schema": "https://raw.githubusercontent.com/flora131/atomic/main/assets/settings.schema.json"
+  "$schema": "https://raw.githubusercontent.com/flora131/atomic/main/assets/settings.schema.json",
+  "workflows": {
+    "linkedin-connect": {
+      "command": "bun",
+      "args": ["./.atomic/workflows/linkedin-connect/index.ts"],
+      "agents": ["claude"]
+    }
+  }
 }
