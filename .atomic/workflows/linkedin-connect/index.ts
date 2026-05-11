@@ -19,7 +19,7 @@ const linkedinConnect = defineWorkflow({
       type: "text",
       required: true,
       description:
-        "Message template. Must contain [name] and [company name] placeholders.",
+        "Message template. Use [bracketed] placeholders for any per-person details — e.g. [name], [Name], [company], [their recent work], [specific reference to their work/thinking]. Placeholders are filled from each person's LinkedIn profile by the LLM. Casing is ignored. Templates with no placeholders are sent verbatim.",
     },
     {
       name: "profiles",
@@ -74,7 +74,7 @@ const linkedinConnect = defineWorkflow({
             `<chrome_profile_dir>${PROFILE_DIR}</chrome_profile_dir>`,
             "",
             "Validate and report:",
-            "1. Template MUST contain literal '[name]' AND '[company name]'. If either is missing, fail loudly and stop the run.",
+            "1. Placeholders: find every '[...]' token in the template (case-insensitive). List each one verbatim. If there are zero placeholders, note that the template will be sent literally to every profile. Do NOT require any specific token to exist — '[name]', '[Name]', '[company]', '[their recent work]', or no placeholders at all are ALL valid.",
             "2. Each profile line should match https://www.linkedin.com/in/<handle>. List any malformed lines.",
             "3. Print the total profile count.",
             "4. Remind the user: if the Chrome profile directory above is empty/uninitialized, they must run the runner once with --login first to log in to LinkedIn. The execute stage will tell them how.",
@@ -114,7 +114,7 @@ const linkedinConnect = defineWorkflow({
             "",
             "  The runner emits one JSON line per event: { url, status, ... }. Possible statuses:",
             "    sent | dry_run | skip | fail | wait | coffee_break | done | fatal",
-            "  Skip reasons you may see: low_confidence | no_connect_button | dialog_did_not_open | modal_interaction_failed | add_note_unavailable",
+            "  Skip reasons you may see: low_confidence | unfilled_placeholder | message_too_long | no_connect_button | dialog_did_not_open | modal_interaction_failed | add_note_unavailable",
             "  Tail the output and surface each profile result to the user as it arrives. Do NOT batch them.",
             "  When a skip carries a 'screenshot' field, include the path inline so the user can inspect what LinkedIn actually rendered.",
             "",

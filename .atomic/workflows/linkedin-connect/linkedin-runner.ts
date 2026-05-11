@@ -136,15 +136,26 @@ const urls = readFileSync(values.profiles, "utf8")
   .filter(Boolean);
 const template = readFileSync(values.template, "utf8").trim();
 
-if (!template.includes("[name]") || !template.includes("[company name]")) {
+if (!template) {
   log({
     status: "fatal",
-    reason: "template_missing_placeholders",
-    message: "Template must contain literal [name] and [company name].",
+    reason: "template_empty",
+    message: "Template file is empty.",
   });
   await stagehand.close();
   process.exit(1);
 }
+
+const placeholderRegex = /\[[^\]\n]+\]/g;
+const placeholders = Array.from(new Set(template.match(placeholderRegex) ?? []));
+const LINKEDIN_NOTE_LIMIT = 300;
+log({
+  status: "info",
+  message:
+    placeholders.length === 0
+      ? "Template has no placeholders — it will be sent verbatim to every profile."
+      : `Detected ${placeholders.length} placeholder(s): ${placeholders.join(", ")}`,
+});
 
 await page.goto("https://www.linkedin.com/feed/", { waitUntil: "domcontentloaded" });
 await sleep(rand(2000, 4000));
@@ -159,7 +170,35 @@ if (currentUrl.includes("/login") || currentUrl.includes("/uas/login")) {
   process.exit(1);
 }
 
-const ExtractSchema = z.object({
+// When the template has placeholders we ask the model to do the whole fill
+// in one shot: read the profile, render the message, and return it alongside
+// name + company for logging. This handles arbitrary bracketed tokens —
+// '[Name]', '[their recent work]', '[specific reference to their thinking]'
+// — without us having to enumerate token kinds.
+const FillSchema = z.object({
+  name: z
+    .string()
+    .describe("The person's first name only (for logging — not necessarily used in the message)"),
+  company: z
+    .string()
+    .describe(
+      "Their primary current employer — full-time role, not board/advisor/investor (for logging)",
+    ),
+  filled_message: z
+    .string()
+    .describe(
+      `The template with every [bracketed] placeholder replaced with content tailored to this person from their visible profile (headline, About, Experience, Featured, recent Activity). Casing is ignored — [Name], [name], and [NAME] all mean their first name. For descriptive placeholders, reference something concrete and specific from the profile (a project, post, paper, role focus); avoid generic praise. Preserve every non-bracketed character of the template exactly, including punctuation and emojis. Keep the final message at or under ${LINKEDIN_NOTE_LIMIT} characters (LinkedIn's connection-note limit). If you cannot find specific content for a descriptive placeholder, lower confidence rather than inventing details.`,
+    ),
+  confidence: z
+    .enum(["high", "medium", "low"])
+    .describe(
+      "'high' — clear primary employer AND specific reference content found; 'medium' — both present but partially inferred; 'low' — missing primary employer OR no concrete content for descriptive placeholders OR fabricated to fit.",
+    ),
+});
+
+// Schema used when the template has zero placeholders — we only need
+// name + company for the log row.
+const NameCompanySchema = z.object({
   name: z.string().describe("The person's first name only"),
   company: z
     .string()
@@ -198,23 +237,63 @@ for (const url of urls) {
     }
     await sleep(rand(1000, 2000));
 
-    const extracted = await stagehand.extract(
-      [
-        "Extract the person's first name and their PRIMARY current company.",
-        "",
-        "For 'company': identify the most legitimate full-time employer.",
-        "- Inspect the headline (e.g. 'Senior Engineer at Acme').",
-        "- Inspect the Experience section's roles marked as 'Present'.",
-        "- If multiple current roles, pick the main employer (founder/employee role)",
-        "  rather than board-member, advisor, investor, or angel positions at other companies.",
-        "",
-        "Set confidence:",
-        "  'high'   — single clear primary employer",
-        "  'medium' — primary employer is reasonably clear",
-        "  'low'    — unclear, contradictory, or no real current employer",
-      ].join("\n"),
-      ExtractSchema,
-    );
+    const extracted = placeholders.length === 0
+      ? await stagehand.extract(
+          [
+            "Extract the person's first name and their PRIMARY current company.",
+            "",
+            "For 'company': identify the most legitimate full-time employer.",
+            "- Inspect the headline (e.g. 'Senior Engineer at Acme').",
+            "- Inspect the Experience section's roles marked as 'Present'.",
+            "- If multiple current roles, pick the main employer (founder/employee role)",
+            "  rather than board-member, advisor, investor, or angel positions at other companies.",
+            "",
+            "Set confidence:",
+            "  'high'   — single clear primary employer",
+            "  'medium' — primary employer is reasonably clear",
+            "  'low'    — unclear, contradictory, or no real current employer",
+          ].join("\n"),
+          NameCompanySchema,
+        )
+      : await stagehand.extract(
+          [
+            "You are helping personalize a LinkedIn connection request for the person whose profile is on screen.",
+            "",
+            "<template>",
+            template,
+            "</template>",
+            "",
+            "<detected_placeholders>",
+            placeholders.join("\n"),
+            "</detected_placeholders>",
+            "",
+            "Render `filled_message` by replacing every [bracketed] token in the template above.",
+            "Rules:",
+            "- Placeholder matching is case-insensitive: [Name], [name], [NAME] all refer to the person's first name.",
+            "- Common placeholder kinds you may encounter and how to fill them:",
+            "    * name / first name           → their first name only",
+            "    * company / company name      → their primary current employer (see company rules below)",
+            "    * role / title / position     → their current title at the primary employer",
+            "    * school / university         → their most recent / most prominent school",
+            "    * their work / recent work    → one concrete project, post, paper, or current role focus",
+            "    * specific reference …        → one concrete, specific thing visible on the profile —",
+            "                                     a recent post, a featured project, a publication, a",
+            "                                     standout accomplishment, or the focus of their current",
+            "                                     role. Never generic ('your impressive work'); always",
+            "                                     something a stranger could only know by reading the page.",
+            "- Preserve every non-bracketed character of the template exactly, including punctuation, spacing, and emojis.",
+            "- Keep `filled_message` at or under " + LINKEDIN_NOTE_LIMIT + " characters total (LinkedIn's connection-note limit). If a faithful fill would exceed it, tighten the descriptive placeholder rather than truncating template wording.",
+            "- Do NOT leave any [bracketed] token in the output. If you cannot fill one with something specific from the profile, lower confidence to 'low' instead of fabricating.",
+            "",
+            "For `company`: identify the most legitimate full-time employer (headline + Experience roles marked 'Present'; prefer founder/employee over advisor/board/investor positions).",
+            "",
+            "Set confidence:",
+            "  'high'   — clear primary employer AND specific reference content was available for descriptive placeholders",
+            "  'medium' — both present but partially inferred",
+            "  'low'    — missing primary employer, no concrete content for a descriptive placeholder, or any placeholder ended up generic / fabricated",
+          ].join("\n"),
+          FillSchema,
+        );
 
     if (
       extracted.confidence === "low" ||
@@ -223,9 +302,43 @@ for (const url of urls) {
     ) {
       log({ url, status: "skip", reason: "low_confidence", extracted });
     } else {
-      const message = template
-        .replaceAll("[name]", extracted.name)
-        .replaceAll("[company name]", extracted.company);
+      const filled = (extracted as { filled_message?: string }).filled_message;
+      const candidateMessage =
+        typeof filled === "string" && filled.length > 0 ? filled.trim() : template;
+
+      // Safety net: never click Send on a message that still contains an
+      // unfilled [bracketed] token. The schema description forbids this, but
+      // the LLM occasionally misses one — better to skip the profile than
+      // send a literal "[Name]" to a stranger.
+      const leftover = candidateMessage.match(placeholderRegex);
+      if (leftover && leftover.length > 0) {
+        log({
+          url,
+          status: "skip",
+          reason: "unfilled_placeholder",
+          unfilled: leftover,
+          name: extracted.name,
+          company: extracted.company,
+          candidate: candidateMessage,
+        });
+        continue;
+      }
+
+      if (candidateMessage.length > LINKEDIN_NOTE_LIMIT) {
+        log({
+          url,
+          status: "skip",
+          reason: "message_too_long",
+          length: candidateMessage.length,
+          limit: LINKEDIN_NOTE_LIMIT,
+          name: extracted.name,
+          company: extracted.company,
+          candidate: candidateMessage,
+        });
+        continue;
+      }
+
+      const message = candidateMessage;
 
       // Click the profile-card Connect button via a scoped Playwright
       // locator instead of stagehand.observe(). Two reasons:
