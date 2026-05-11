@@ -9,19 +9,17 @@
       ]
     },
     "opencode": {
-      "chatFlags": [
-        "--model",
-        "anthropic/claude-opus-4-7"
-      ]
+      "chatFlags": ["--model", "anthropic/claude-opus-4-7"]
     },
     "copilot": {
       "chatFlags": [
         "--add-dir",
         ".",
         "--yolo",
-        "--experimental",
         "--model",
-        "claude-opus-4.7"
+        "gpt-5.5",
+        "--reasoning-effort",
+        "low"
       ]
     }
   }

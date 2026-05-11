@@ -325,12 +325,14 @@ class AtomicRalph(BaseInstalledAgent):
         returns immediately after spawning the session, then poll
         `atomic workflow status` until the workflow finishes — only then
         does `run()` return control to Harbor for verification.
+
+        Polling runs until ralph reaches a terminal state. Harbor's
+        `_agent_timeout_sec` (derived from the task's `timeout_sec` × the
+        configured multiplier) is the sole wall-clock bound — when it
+        fires, Harbor cancels the surrounding `exec_as_agent` call. We
+        emit a heartbeat line every 30s so the run log shows liveness.
         """
         log = shlex.quote(_LOG_FILE)
-        max_loops = int(self._resolved_flags.get("max_loops", _DEFAULT_MAX_LOOPS))
-        # Budget ~60s per loop with a 5-minute floor; the outer Harbor
-        # `agent_timeout_multiplier` still bounds total wall time.
-        poll_deadline_seconds = max(300, max_loops * 60)
         prelude = self._agent_runtime_prelude()
         prelude_line = f"{prelude}\n" if prelude else ""
         cd_line = (
@@ -362,9 +364,10 @@ class AtomicRalph(BaseInstalledAgent):
             fi
             echo "[atomic-ralph] polling session: $SESSION" >> {log}
 
-            DEADLINE=$(($(date +%s) + {poll_deadline_seconds}))
+            ITER=0
             OVERALL=""
-            while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            while true; do
+                ITER=$((ITER + 1))
                 STATUS=$(atomic workflow status "$SESSION" --format json 2>/dev/null)
                 OVERALL=$(printf '%s' "$STATUS" \\
                     | grep -oE '"overall":[[:space:]]*"[^"]+"' \\
@@ -373,9 +376,14 @@ class AtomicRalph(BaseInstalledAgent):
                 case "$OVERALL" in
                     completed|error|needs_review) break ;;
                 esac
+                # Heartbeat every 6 polls (~30s at 5s sleep) so the log
+                # shows the script is alive while ralph is still working.
+                if [ $((ITER % 6)) -eq 0 ]; then
+                    echo "[atomic-ralph] poll iter=$ITER status=${{OVERALL:-<empty>}}" >> {log}
+                fi
                 sleep 5
             done
-            echo "[atomic-ralph] terminal status: ${{OVERALL:-timeout}}" >> {log}
+            echo "[atomic-ralph] terminal status: $OVERALL after $ITER polls" >> {log}
 
             RUN_ID=$(printf '%s' "$SESSION" | grep -oE '[0-9a-f]+$')
             ORCH_LOG="$HOME/.atomic/sessions/$RUN_ID/orchestrator.log"
