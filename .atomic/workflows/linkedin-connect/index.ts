@@ -2,17 +2,17 @@
 import { defineWorkflow, hostLocalWorkflows } from "@bastani/atomic-sdk";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-const RUNNER = new URL("./linkedin-runner.ts", import.meta.url).pathname;
 const PROFILE_DIR = join(homedir(), ".atomic/workflows/linkedin-connect/chrome-profile");
+const PLAYWRIGHT_SESSION = "linkedin-connect";
 
 const linkedinConnect = defineWorkflow({
   name: "linkedin-connect",
   source: import.meta.path,
   description:
-    "Send LinkedIn connection requests with a personalized template via local Stagehand against a persistent Chrome profile.",
+    "Send LinkedIn connection requests with Claude-driven browser inspection against a persistent Chrome profile.",
   inputs: [
     {
       name: "template",
@@ -44,6 +44,8 @@ const linkedinConnect = defineWorkflow({
     const scratch = mkdtempSync(join(tmpdir(), "linkedin-connect-"));
     const profilesPath = join(scratch, "profiles.txt");
     const templatePath = join(scratch, "template.txt");
+    const artifactsDir = join(scratch, "artifacts");
+    mkdirSync(artifactsDir, { recursive: true });
     writeFileSync(profilesPath, ctx.inputs.profiles);
     writeFileSync(templatePath, ctx.inputs.template);
 
@@ -77,7 +79,7 @@ const linkedinConnect = defineWorkflow({
             "1. Placeholders: find every '[...]' token in the template (case-insensitive). List each one verbatim. If there are zero placeholders, note that the template will be sent literally to every profile. Do NOT require any specific token to exist — '[name]', '[Name]', '[company]', '[their recent work]', or no placeholders at all are ALL valid.",
             "2. Each profile line should match https://www.linkedin.com/in/<handle>. List any malformed lines.",
             "3. Print the total profile count.",
-            "4. Remind the user: if the Chrome profile directory above is empty/uninitialized, they must run the runner once with --login first to log in to LinkedIn. The execute stage will tell them how.",
+            "4. Remind the user: if the Chrome profile directory above is empty/uninitialized, the execute stage will open LinkedIn in a persistent Playwright browser so they can log in once.",
             "5. Mention pacing: random 60-180s between profiles, 5-15min coffee break every 5-8 profiles.",
             "6. One-line LinkedIn TOS warning.",
             "",
@@ -89,39 +91,57 @@ const linkedinConnect = defineWorkflow({
     );
 
     await ctx.stage(
-      { name: "execute", description: "Run the Stagehand batch and stream results" },
+      { name: "execute", description: "Claude drives LinkedIn via browser screenshots" },
       {},
       { chatFlags: ["--dangerously-skip-permissions"] },
       async (s) => {
         await s.session.query(
           [
-            "Run the LinkedIn connection-request batch using the local Stagehand runner.",
+            "Run the LinkedIn connection-request batch yourself with playwright-cli and visual browser inspection.",
+            "Do not run the old Stagehand runner. Do not write a DOM-scraping script. Do not parse LinkedIn HTML.",
+            "You are the decision-maker: use snapshots, screenshots, and visible browser state to extract profile details, fill the template, and click the visible LinkedIn controls.",
             "",
-            `Runner script: ${RUNNER}`,
             `Profiles file: ${profilesPath}`,
             `Template file: ${templatePath}`,
             `Chrome profile dir: ${PROFILE_DIR}`,
+            `Playwright session name: ${PLAYWRIGHT_SESSION}`,
+            `Artifact directory: ${artifactsDir}`,
             `Dry run: ${ctx.inputs.dry_run}`,
             "",
-            "Step 1 — verify login state.",
-            `  Run: ls -A "${PROFILE_DIR}" 2>/dev/null | head -5`,
-            "  If the directory is missing or empty, the user has not logged in yet. Tell them to run:",
-            `    bun ${RUNNER} --login`,
-            "  …and to log in to LinkedIn in the launched Chrome window, then press Enter in the terminal to close. Stop and wait for them to confirm before continuing.",
+            "Tooling rules:",
+            "1. Use `playwright-cli` for browser work. If the command is unavailable, use `bunx playwright-cli` for the same command.",
+            `2. Always use the named session: \`playwright-cli -s=${PLAYWRIGHT_SESSION} ...\` so browser state stays consistent. If falling back to bunx, keep the same arguments: \`bunx playwright-cli -s=${PLAYWRIGHT_SESSION} ...\`.`,
+            "3. Prefer refs from `playwright-cli snapshot` for clicks and fills. Re-snapshot after every navigation, menu open, modal open, and modal fill.",
+            "4. Screenshots are primary evidence. Save at least one profile screenshot and one final modal screenshot per processed profile.",
+            "5. Avoid brittle selectors, CSS classes, LinkedIn internals, or custom scripts that inspect the DOM. Only use visible text, accessibility snapshot refs, screenshots, and normal browser actions.",
             "",
-            "Step 2 — run the batch (only after login is confirmed):",
-            `    CHROME_PROFILE_DIR="${PROFILE_DIR}" DRY_RUN=${ctx.inputs.dry_run} bun ${RUNNER} --profiles "${profilesPath}" --template "${templatePath}"`,
+            "Step 1 — open LinkedIn and verify login state.",
+            `  Run: playwright-cli -s=${PLAYWRIGHT_SESSION} open https://www.linkedin.com/feed/ --profile="${PROFILE_DIR}"`,
+            `  Then run: playwright-cli -s=${PLAYWRIGHT_SESSION} snapshot`,
+            "  If LinkedIn shows a login page, stop and tell the user to log in in the opened browser window. Wait for user confirmation, then reload the feed and continue.",
             "",
-            "  The runner emits one JSON line per event: { url, status, ... }. Possible statuses:",
-            "    sent | dry_run | skip | fail | wait | coffee_break | done | fatal",
-            "  Skip reasons you may see: low_confidence | unfilled_placeholder | message_too_long | no_connect_button | dialog_did_not_open | modal_interaction_failed | add_note_unavailable",
-            "  Tail the output and surface each profile result to the user as it arrives. Do NOT batch them.",
-            "  When a skip carries a 'screenshot' field, include the path inline so the user can inspect what LinkedIn actually rendered.",
+            "Step 2 — process each profile URL from the profiles file sequentially.",
+            "For profile N:",
+            `  a. Navigate with \`playwright-cli -s=${PLAYWRIGHT_SESSION} goto <url>\`.`,
+            `  b. Save screenshots to ${artifactsDir}/profile-N-top.png and, after scrolling, ${artifactsDir}/profile-N-details.png.`,
+            "  c. Use the screenshot and snapshot content to extract first name, primary current company, and one concrete specific reference from visible profile content. Scroll as needed to About, Featured, Activity, and Experience. Do not invent details.",
+            "  d. Fill every [bracketed] placeholder in the template using those visible details. [Name]/[name] means first name. Descriptive placeholders need a concrete visible reference, not generic praise.",
+            "  e. Preserve non-placeholder template text exactly, keep the final note at or under 300 characters, and skip rather than send if any placeholder remains or confidence is low.",
+            "  f. Find the visible Connect action from the snapshot. If direct Connect is absent, open the visible More menu and inspect that menu snapshot for Connect. Skip if the page indicates already connected, pending, unavailable, or no connection path.",
+            "  g. After the invitation modal opens, snapshot it, click the visible Add a note action by ref, snapshot again, fill the visible note textarea by ref, and save a final screenshot to `${artifactsDir}/profile-N-modal.png`.",
+            "  h. If dry_run is true, do not send. Close/cancel the modal after capturing the filled modal screenshot and mark status `dry_run`.",
+            "  i. If dry_run is false, click the visible Send/Send invitation button only after verifying the filled modal screenshot has the intended note and no placeholders.",
             "",
-            "Step 3 — when the runner exits, print a markdown summary table (url, name, company, status, reason) plus totals: sent, dry_run, skipped, failed.",
-            "  If any rows have status=skip with reason=modal_interaction_failed or dialog_did_not_open, list the screenshot paths in a separate 'Debug captures' section.",
+            "Step 3 — report progress live.",
+            "After each profile, immediately print a one-line result with: profile number, url, name, company, status, reason, and screenshot path. Do not wait until the whole batch finishes.",
+            "Use statuses: sent | dry_run | skip | fail. Use skip reasons: low_confidence | unfilled_placeholder | message_too_long | no_connect_button | already_connected | pending | modal_interaction_failed | user_login_required.",
             "",
-            "If the runner exits with status:fatal (e.g. not_logged_in), stop immediately and tell the user to re-run --login.",
+            "Step 4 — pacing.",
+            "Between successful/attempted profiles, wait a random 60-180 seconds. Every 5-8 profiles, take a random 5-15 minute coffee break. If there is only one profile, do not wait after it.",
+            "",
+            "Step 5 — final output.",
+            "Print a markdown summary table with columns: url, name, company, status, reason, screenshot. Then print totals: sent, dry_run, skipped, failed.",
+            "Include an `Artifacts` section listing the artifact directory and any modal/debug screenshots.",
           ].join("\n"),
         );
         s.save(s.sessionId);
