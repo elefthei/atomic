@@ -6,7 +6,7 @@
     "linkedin-connect": {
       "command": "bun",
       "args": ["./.atomic/workflows/linkedin-connect/index.ts"],
-      "agents": ["claude"]
+      "agents": ["claude", "opencode"]
     }
   }
 }
