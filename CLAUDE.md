@@ -120,6 +120,14 @@ pi:
 
 Atomic mirrors pi's tag-driven release flow: bump versions locally, commit, push a `v<version>` git tag, and CI publishes to npm with OIDC provenance and creates the GitHub Release with cross-compiled binaries attached.
 
+### Agent publishing requests
+
+If a user asks you to publish the package:
+
+- Ask the user with the `ask_user_question`/ask-question tool what version to publish if they have not supplied a version.
+- Ask whether they want a release or prerelease if that cannot be inferred from the supplied version, or if the version is in an incorrect format. Valid formats are `MAJOR.MINOR.PATCH` for releases and `MAJOR.MINOR.PATCH-NUMBER` for prereleases.
+- Remember that publishing is triggered by the git tag flow: create `git tag v<version>` and push it with `git push origin v<version>` after the version bump commit is on the branch. A branch push or PR merge alone does not publish.
+
 ### Bumping Versions
 
 Use the top-level `scripts/bump-version.ts` script to update every `packages/*/package.json` version and package README badge:
