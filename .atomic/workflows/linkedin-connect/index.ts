@@ -1,12 +1,17 @@
 #!/usr/bin/env bun
 import { defineWorkflow, hostLocalWorkflows } from "@bastani/atomic-sdk";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
-const PROFILE_DIR = join(homedir(), ".atomic/workflows/linkedin-connect/chrome-profile");
-const PLAYWRIGHT_SESSION = "linkedin-connect";
+
+// Pin TMPDIR so playwright-cli's daemon socket path stays under Darwin's
+// ~104-byte sun_path limit. macOS's default $TMPDIR (/var/folders/...) plus
+// the session-suffixed sock filename overflows and the daemon refuses to bind.
+// Setting it here propagates to the daemon, the agent CLI subprocesses, and
+// any tmpdir()-derived paths in this file.
+process.env.TMPDIR = "/tmp";
 
 const workflowMeta = {
   name: "linkedin-connect",
@@ -44,6 +49,7 @@ function buildPrepareReport(args: {
   template: string;
   profileLines: string[];
   dryRun: string;
+  profileDir: string;
 }): string {
   return [
     "You are preparing a LinkedIn connection-request batch.",
@@ -58,13 +64,13 @@ function buildPrepareReport(args: {
     "</first_three_profiles>",
     "",
     `<dry_run>${args.dryRun}</dry_run>`,
-    `<chrome_profile_dir>${PROFILE_DIR}</chrome_profile_dir>`,
+    `<chrome_profile_dir>${args.profileDir}</chrome_profile_dir>`,
     "",
     "Validate and report:",
     "1. Placeholders: find every '[...]' token in the template (case-insensitive). List each verbatim. Templates with zero placeholders are sent literally; templates with placeholders are filled from visible profile content, with the wording adapted when the profile doesn't cleanly match a slot.",
     "2. Each profile line should match https://www.linkedin.com/in/<handle>. List any malformed lines.",
     "3. Print the total profile count.",
-    "4. Remind the user: if the Chrome profile directory above is empty/uninitialized, the execute stage will open LinkedIn in a persistent Playwright browser so they can log in once.",
+    "4. Confirm to the user that the headed Chrome window is already open and logged into LinkedIn (the workflow runner handled login before this stage); execute stages will reuse that session.",
     "5. Mention pacing: random 60-180s between profiles, 5-15min coffee break every 5-8 profiles.",
     "6. One-line LinkedIn TOS warning.",
     "",
@@ -79,6 +85,8 @@ function buildExecutePrompt(args: {
   templatePath: string;
   artifactsDir: string;
   dryRun: string;
+  profileDir: string;
+  sessionName: string;
 }): string {
   const n = args.profileIndex;
   return [
@@ -89,8 +97,8 @@ function buildExecutePrompt(args: {
     `Profile URL: ${args.profileUrl}`,
     `Profile index: ${n} (of ${args.totalProfiles})`,
     `Template file: ${args.templatePath}`,
-    `Chrome profile dir: ${PROFILE_DIR}`,
-    `Playwright session name: ${PLAYWRIGHT_SESSION}`,
+    `Chrome profile dir: ${args.profileDir}`,
+    `Playwright session name: ${args.sessionName}`,
     `Artifact directory: ${args.artifactsDir}`,
     `Dry run: ${args.dryRun}`,
     "",
@@ -118,19 +126,15 @@ function buildExecutePrompt(args: {
     "",
     "Tooling rules:",
     "1. Use `playwright-cli` for browser work. If the command is unavailable, use `bunx playwright-cli` for the same command.",
-    `2. Always use the named session: \`playwright-cli -s=${PLAYWRIGHT_SESSION} ...\` so browser state stays consistent. If falling back to bunx, keep the same arguments: \`bunx playwright-cli -s=${PLAYWRIGHT_SESSION} ...\`.`,
+    `2. Always use the named session: \`playwright-cli -s=${args.sessionName} ...\` so browser state stays consistent. If falling back to bunx, keep the same arguments: \`bunx playwright-cli -s=${args.sessionName} ...\`.`,
     "3. Prefer refs from `playwright-cli snapshot` for clicks and fills. Re-snapshot after every navigation, menu open, modal open, and modal fill.",
     "4. Screenshots are primary evidence. Save at least one profile screenshot and one final modal screenshot.",
     "5. Avoid brittle selectors, CSS classes, LinkedIn internals, or custom scripts that inspect the DOM. Only use visible text, accessibility snapshot refs, screenshots, and normal browser actions.",
     "",
-    "Step 1 — verify login state.",
-    `  Run: playwright-cli -s=${PLAYWRIGHT_SESSION} open https://www.linkedin.com/feed/ --profile="${PROFILE_DIR}"`,
-    `  Then run: playwright-cli -s=${PLAYWRIGHT_SESSION} snapshot`,
-    "  If LinkedIn shows a login page, stop and tell the user to log in in the opened browser window. Wait for user confirmation, then reload the feed and continue.",
-    "  If you can already see the logged-in feed, proceed immediately to Step 2.",
+    "The browser session is already open in headed mode and logged into LinkedIn — the workflow runner handled login before launching this stage. Do NOT run `playwright-cli open`. Just attach to the existing session via `-s=` and start with the goto in Step 1.",
     "",
-    "Step 2 — process this one profile.",
-    `  a. Navigate with \`playwright-cli -s=${PLAYWRIGHT_SESSION} goto ${args.profileUrl}\`.`,
+    "Step 1 — process this one profile.",
+    `  a. Navigate with \`playwright-cli -s=${args.sessionName} goto ${args.profileUrl}\`.`,
     `  b. Save screenshots to ${args.artifactsDir}/profile-${n}-top.png and, after scrolling, ${args.artifactsDir}/profile-${n}-details.png.`,
     "  c. Scroll through the profile, snapshotting and screenshotting as needed to read Experience, About, Featured, and Activity content.",
     "  d. Produce the note per <message_quality>. Before sending, re-read it: if a literal [bracket] survived, fix or skip. If it doesn't sound human, fix or skip.",
@@ -139,7 +143,7 @@ function buildExecutePrompt(args: {
     "  g. If dry_run is true, do not send. Close/cancel the modal after capturing the filled modal screenshot and mark status `dry_run`.",
     "  h. If dry_run is false, click the visible Send/Send invitation button only after verifying the filled modal screenshot has the intended note and no placeholders.",
     "",
-    "Step 3 — print the result line AND persist it.",
+    "Step 2 — print the result line AND persist it.",
     `Build exactly one space-separated line: profile=${n} url=${args.profileUrl} name=<name> company=<company> status=<status> reason=<reason> screenshot=<path> substitutions=<deviations>. Use \`-\` for empty fields. Use \`;\` to separate multiple substitutions. Never include a literal newline inside any field.`,
     "Use statuses: sent | dry_run | skip | fail. Use skip reasons: low_confidence | unfilled_placeholder | message_too_long | no_connect_button | already_connected | pending | modal_interaction_failed | user_login_required.",
     `Print that line to stdout, then append the exact same single line to ${args.artifactsDir}/results.log via shell (e.g. \`printf '%s\\n' '<line>' >> ${args.artifactsDir}/results.log\`). The append is mandatory — the later summarize stage reads this file.`,
@@ -180,28 +184,38 @@ function setupRun(inputs: { profiles?: string; template?: string }) {
   const artifactsDir = join(scratch, "artifacts");
   mkdirSync(artifactsDir, { recursive: true });
   writeFileSync(templatePath, template);
+  const profileDir = mkdtempSync(join(tmpdir(), "linkedin-connect-profile-"));
+  const sessionName = `linkedin-connect-${basename(profileDir).slice(-12)}`;
   const profileLines = profiles
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
-  return { templatePath, artifactsDir, profileLines, template };
+  return {
+    templatePath,
+    artifactsDir,
+    profileDir,
+    sessionName,
+    profileLines,
+    template,
+  };
 }
 
 function randomBetween(minMs: number, maxMs: number): number {
   return Math.floor(minMs + Math.random() * (maxMs - minMs));
 }
 
-let profilesUntilBreak = randomBetween(5, 9);
-
-function pacingDelayMs(profileIndex: number, totalProfiles: number): number {
-  if (profileIndex >= totalProfiles) return 0;
-  const base = randomBetween(60_000, 180_000);
-  profilesUntilBreak -= 1;
-  if (profilesUntilBreak <= 0) {
-    profilesUntilBreak = randomBetween(5, 9);
-    return base + randomBetween(5 * 60_000, 15 * 60_000);
-  }
-  return base;
+function createPacer(): (profileIndex: number, totalProfiles: number) => number {
+  let profilesUntilBreak = randomBetween(5, 9);
+  return function pacingDelayMs(profileIndex, totalProfiles) {
+    if (profileIndex >= totalProfiles) return 0;
+    const base = randomBetween(60_000, 180_000);
+    profilesUntilBreak -= 1;
+    if (profilesUntilBreak <= 0) {
+      profilesUntilBreak = randomBetween(5, 9);
+      return base + randomBetween(5 * 60_000, 15 * 60_000);
+    }
+    return base;
+  };
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -209,120 +223,242 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Paths that mean "not yet authenticated". LinkedIn can park the user on the
+// raw login form, the OAuth-style /uas/login redirect, MFA/checkpoint pages,
+// or the public-marketing authwall during the interactive login.
+const LINKEDIN_UNAUTH_PATTERNS = [
+  /linkedin\.com\/login/i,
+  /linkedin\.com\/uas\/login/i,
+  /linkedin\.com\/checkpoint\//i,
+  /linkedin\.com\/authwall/i,
+  /linkedin\.com\/signup/i,
+];
+
+const LINKEDIN_AUTH_PATH_PATTERNS = [
+  /linkedin\.com\/feed/i,
+  /linkedin\.com\/in\//i,
+  /linkedin\.com\/mynetwork/i,
+];
+
+function parseEvalUrl(stdout: string): string | null {
+  // `playwright-cli eval "() => location.href"` emits:
+  //   ### Result
+  //   "https://www.linkedin.com/feed/"
+  //   ### ...
+  // Capture the quoted JSON string under "### Result".
+  const m = stdout.match(/### Result\s*\n\s*"([^"\n]+)"/);
+  return m ? m[1]! : null;
+}
+
+async function probeCurrentUrl(sessionName: string): Promise<string | null> {
+  const out = await Bun.$`playwright-cli -s=${sessionName} eval ${"() => location.href"}`
+    .nothrow()
+    .quiet();
+  if (out.exitCode !== 0) return null;
+  return parseEvalUrl(out.stdout.toString());
+}
+
+function isAuthenticatedUrl(url: string): boolean {
+  if (LINKEDIN_UNAUTH_PATTERNS.some((rx) => rx.test(url))) return false;
+  return LINKEDIN_AUTH_PATH_PATTERNS.some((rx) => rx.test(url));
+}
+
+async function openLoginSession(args: {
+  sessionName: string;
+  profileDir: string;
+}): Promise<void> {
+  // Quiet both `open` and the polling probes so the orchestrator's OpenTUI
+  // renderer (which owns this pane's stdin/stdout) isn't corrupted by
+  // playwright-cli's stdout markdown trace ("### Browser … opened with pid …",
+  // "### Ran Playwright code", etc.).
+  await Bun.$`playwright-cli -s=${args.sessionName} open --headed --persistent --profile=${args.profileDir} https://www.linkedin.com/login`
+    .nothrow()
+    .quiet();
+
+  // Read-only URL polling. `eval "() => location.href"` doesn't navigate, so
+  // it won't interrupt the user's in-progress login / MFA / checkpoint flow.
+  // The headed Chrome window IS the prompt — no stdin readline needed.
+  const timeoutMs = Number(process.env.LINKEDIN_LOGIN_TIMEOUT_MS ?? 10 * 60 * 1000);
+  const pollIntervalMs = Number(process.env.LINKEDIN_LOGIN_POLL_MS ?? 3000);
+  const deadline = Date.now() + timeoutMs;
+  let lastUrl: string | null = null;
+
+  while (Date.now() < deadline) {
+    lastUrl = await probeCurrentUrl(args.sessionName);
+    if (lastUrl && isAuthenticatedUrl(lastUrl)) {
+      // Normalise to /feed so execute stages start from a known location.
+      await Bun.$`playwright-cli -s=${args.sessionName} goto https://www.linkedin.com/feed/`
+        .nothrow()
+        .quiet();
+      return;
+    }
+    await sleep(pollIntervalMs);
+  }
+
+  throw new Error(
+    `Timed out after ${Math.round(timeoutMs / 1000)}s waiting for LinkedIn login. ` +
+      `Last observed URL: ${lastUrl ?? "<unknown>"}. ` +
+      `Set LINKEDIN_LOGIN_TIMEOUT_MS to extend the wait.`,
+  );
+}
+
+async function teardownRun(args: {
+  sessionName: string;
+  profileDir: string;
+}): Promise<void> {
+  await Bun.$`playwright-cli -s=${args.sessionName} close`.nothrow().quiet();
+  // Belt-and-suspenders: if `close` couldn't reach the daemon, kill any
+  // lingering daemon process for this session by name. cliDaemon.js lists the
+  // session name as its first argv, so a name-anchored pkill is safe.
+  await Bun.$`pkill -f ${`cliDaemon.js ${args.sessionName}`}`.nothrow().quiet();
+  await rm(args.profileDir, { recursive: true, force: true });
+}
+
+function installCleanup(
+  getArgs: () => { sessionName: string; profileDir: string } | null,
+): void {
+  let ran = false;
+  const cleanup = async (code: number): Promise<void> => {
+    if (ran) return;
+    ran = true;
+    const args = getArgs();
+    if (args) {
+      try {
+        await teardownRun(args);
+      } catch (err) {
+        console.error("teardown failed:", err);
+      }
+    }
+    process.exit(code);
+  };
+  process.on("SIGINT", () => void cleanup(130));
+  process.on("SIGTERM", () => void cleanup(143));
+  process.on("uncaughtException", (err) => {
+    console.error(err);
+    void cleanup(1);
+  });
+}
+
 const linkedinConnectClaude = defineWorkflow(workflowMeta)
   .for("claude")
   .run(async (ctx) => {
-    const { templatePath, artifactsDir, profileLines, template } =
-      setupRun(ctx.inputs);
+    const {
+      templatePath,
+      artifactsDir,
+      profileDir,
+      sessionName,
+      profileLines,
+      template,
+    } = setupRun(ctx.inputs);
     const dryRun = ctx.inputs.dry_run ?? "false";
     const totalProfiles = profileLines.length;
+    const pacingDelayMs = createPacer();
+    let cleanupArgs: { sessionName: string; profileDir: string } | null = {
+      sessionName,
+      profileDir,
+    };
+    installCleanup(() => cleanupArgs);
 
-    await ctx.stage(
-      { name: "prepare", description: "Validate inputs and confirm logged-in profile" },
-      {},
-      {},
-      async (s) => {
-        await s.session.query(
-          buildPrepareReport({ template, profileLines, dryRun }),
-        );
-        s.save(s.sessionId);
-      },
-    );
+    try {
+      await openLoginSession({ sessionName, profileDir });
 
-    for (let i = 0; i < totalProfiles; i++) {
-      const profileUrl = profileLines[i]!;
-      const profileIndex = i + 1;
       await ctx.stage(
-        {
-          name: `execute-${profileIndex}`,
-          description: `Claude processes profile ${profileIndex}/${totalProfiles}: ${profileUrl}`,
-        },
-        { chatFlags: ["--dangerously-skip-permissions"] },
+        { name: "prepare", description: "Validate inputs and confirm logged-in profile" },
+        {},
         {},
         async (s) => {
           await s.session.query(
-            buildExecutePrompt({
-              profileUrl,
-              profileIndex,
-              totalProfiles,
-              templatePath,
-              artifactsDir,
-              dryRun,
-            }),
+            buildPrepareReport({ template, profileLines, dryRun, profileDir }),
           );
           s.save(s.sessionId);
         },
       );
 
-      await sleep(pacingDelayMs(profileIndex, totalProfiles));
-    }
-
-    const resultsPath = join(artifactsDir, "results.log");
-    await ctx.stage(
-      { name: "summarize", description: "Render the batch summary table and totals" },
-      {},
-      {},
-      async (s) => {
-        await s.session.query(
-          buildSummarizePrompt({ resultsPath, artifactsDir, totalProfiles }),
+      for (let i = 0; i < totalProfiles; i++) {
+        const profileUrl = profileLines[i]!;
+        const profileIndex = i + 1;
+        await ctx.stage(
+          {
+            name: `execute-${profileIndex}`,
+            description: `Claude processes profile ${profileIndex}/${totalProfiles}: ${profileUrl}`,
+          },
+          { chatFlags: ["--dangerously-skip-permissions"] },
+          {},
+          async (s) => {
+            await s.session.query(
+              buildExecutePrompt({
+                profileUrl,
+                profileIndex,
+                totalProfiles,
+                templatePath,
+                artifactsDir,
+                dryRun,
+                profileDir,
+                sessionName,
+              }),
+            );
+            s.save(s.sessionId);
+          },
         );
-        s.save(s.sessionId);
-      },
-    );
+
+        await sleep(pacingDelayMs(profileIndex, totalProfiles));
+      }
+
+      const resultsPath = join(artifactsDir, "results.log");
+      await ctx.stage(
+        { name: "summarize", description: "Render the batch summary table and totals" },
+        {},
+        {},
+        async (s) => {
+          await s.session.query(
+            buildSummarizePrompt({ resultsPath, artifactsDir, totalProfiles }),
+          );
+          s.save(s.sessionId);
+        },
+      );
+    } finally {
+      const args = cleanupArgs;
+      cleanupArgs = null;
+      if (args) await teardownRun(args);
+    }
   })
   .compile();
 
 const linkedinConnectOpencode = defineWorkflow(workflowMeta)
   .for("opencode")
   .run(async (ctx) => {
-    const { templatePath, artifactsDir, profileLines, template } =
-      setupRun(ctx.inputs);
+    const {
+      templatePath,
+      artifactsDir,
+      profileDir,
+      sessionName,
+      profileLines,
+      template,
+    } = setupRun(ctx.inputs);
     const dryRun = ctx.inputs.dry_run ?? "false";
     const totalProfiles = profileLines.length;
+    const pacingDelayMs = createPacer();
     const allowAll = [{ permission: "*", pattern: "*", action: "allow" as const }];
+    let cleanupArgs: { sessionName: string; profileDir: string } | null = {
+      sessionName,
+      profileDir,
+    };
+    installCleanup(() => cleanupArgs);
 
-    await ctx.stage(
-      { name: "prepare", description: "Validate inputs and confirm logged-in profile" },
-      {},
-      { title: "prepare", permission: allowAll },
-      async (s) => {
-        await s.client.session.prompt({
-          sessionID: s.session.id,
-          parts: [
-            {
-              type: "text",
-              text: buildPrepareReport({ template, profileLines, dryRun }),
-            },
-          ],
-        });
-        s.save(s.sessionId);
-      },
-    );
+    try {
+      await openLoginSession({ sessionName, profileDir });
 
-    for (let i = 0; i < totalProfiles; i++) {
-      const profileUrl = profileLines[i]!;
-      const profileIndex = i + 1;
       await ctx.stage(
-        {
-          name: `execute-${profileIndex}`,
-          description: `OpenCode processes profile ${profileIndex}/${totalProfiles}: ${profileUrl}`,
-        },
+        { name: "prepare", description: "Validate inputs and confirm logged-in profile" },
         {},
-        { title: `execute-${profileIndex}`, permission: allowAll },
+        { title: "prepare", permission: allowAll },
         async (s) => {
           await s.client.session.prompt({
             sessionID: s.session.id,
             parts: [
               {
                 type: "text",
-                text: buildExecutePrompt({
-                  profileUrl,
-                  profileIndex,
-                  totalProfiles,
-                  templatePath,
-                  artifactsDir,
-                  dryRun,
-                }),
+                text: buildPrepareReport({ template, profileLines, dryRun, profileDir }),
               },
             ],
           });
@@ -330,27 +466,65 @@ const linkedinConnectOpencode = defineWorkflow(workflowMeta)
         },
       );
 
-      await sleep(pacingDelayMs(profileIndex, totalProfiles));
-    }
+      for (let i = 0; i < totalProfiles; i++) {
+        const profileUrl = profileLines[i]!;
+        const profileIndex = i + 1;
+        await ctx.stage(
+          {
+            name: `execute-${profileIndex}`,
+            description: `OpenCode processes profile ${profileIndex}/${totalProfiles}: ${profileUrl}`,
+          },
+          {},
+          { title: `execute-${profileIndex}`, permission: allowAll },
+          async (s) => {
+            await s.client.session.prompt({
+              sessionID: s.session.id,
+              parts: [
+                {
+                  type: "text",
+                  text: buildExecutePrompt({
+                    profileUrl,
+                    profileIndex,
+                    totalProfiles,
+                    templatePath,
+                    artifactsDir,
+                    dryRun,
+                    profileDir,
+                    sessionName,
+                  }),
+                },
+              ],
+            });
+            s.save(s.sessionId);
+          },
+        );
 
-    const resultsPath = join(artifactsDir, "results.log");
-    await ctx.stage(
-      { name: "summarize", description: "Render the batch summary table and totals" },
-      {},
-      { title: "summarize", permission: allowAll },
-      async (s) => {
-        await s.client.session.prompt({
-          sessionID: s.session.id,
-          parts: [
-            {
-              type: "text",
-              text: buildSummarizePrompt({ resultsPath, artifactsDir, totalProfiles }),
-            },
-          ],
-        });
-        s.save(s.sessionId);
-      },
-    );
+        await sleep(pacingDelayMs(profileIndex, totalProfiles));
+      }
+
+      const resultsPath = join(artifactsDir, "results.log");
+      await ctx.stage(
+        { name: "summarize", description: "Render the batch summary table and totals" },
+        {},
+        { title: "summarize", permission: allowAll },
+        async (s) => {
+          await s.client.session.prompt({
+            sessionID: s.session.id,
+            parts: [
+              {
+                type: "text",
+                text: buildSummarizePrompt({ resultsPath, artifactsDir, totalProfiles }),
+              },
+            ],
+          });
+          s.save(s.sessionId);
+        },
+      );
+    } finally {
+      const args = cleanupArgs;
+      cleanupArgs = null;
+      if (args) await teardownRun(args);
+    }
   })
   .compile();
 
