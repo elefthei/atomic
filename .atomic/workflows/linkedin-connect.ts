@@ -1,7 +1,8 @@
 import { defineWorkflow } from "@bastani/workflows";
 import { basename, join } from "node:path";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import type { WorkflowRunContext } from "@bastani/workflows";
 
@@ -23,6 +24,8 @@ interface RunSetup {
   readonly artifactsDir: string;
   readonly profileDir: string;
   readonly sessionName: string;
+  readonly loginScriptPath: string;
+  readonly loginStatusPath: string;
   readonly profileLines: readonly string[];
   readonly template: string;
   readonly noNote: boolean;
@@ -31,6 +34,12 @@ interface RunSetup {
 interface CleanupArgs {
   readonly sessionName: string;
   readonly profileDir: string;
+}
+
+interface LoginStatus {
+  readonly status?: string;
+  readonly url?: string;
+  readonly error?: string;
 }
 
 const BROWSER_STAGE_TOOLS = ["bash", "read"];
@@ -68,7 +77,7 @@ function buildPrepareReport(args: {
       : "1. Placeholders: find every '[...]' token in the template (case-insensitive). List each verbatim. Templates with zero placeholders are sent literally; templates with placeholders are filled from each person's LinkedIn profile by the LLM. Casing is ignored. Templates with no placeholders are sent verbatim.",
     "2. Each profile line should match https://www.linkedin.com/in/<handle>. List any malformed lines.",
     "3. Print the total profile count.",
-    "4. Confirm to the user that the headed Chrome window is already open and logged into LinkedIn (the workflow runner handled login before this stage); execute stages will reuse that session.",
+    "4. Confirm to the user that the headed Chrome window is already open and logged into LinkedIn (the login stage handled login before this stage); execute stages will reuse that session.",
     "5. Mention pacing: random 60-180s between profiles, 5-15min coffee break every 5-8 profiles.",
     "6. One-line LinkedIn TOS warning.",
     "",
@@ -132,7 +141,7 @@ function buildExecutePrompt(args: {
     "4. Screenshots are primary evidence. Save at least one profile screenshot and one final modal screenshot.",
     "5. Avoid brittle selectors, CSS classes, LinkedIn internals, or custom scripts that inspect the DOM. Only use visible text, accessibility snapshot refs, screenshots, and normal browser actions.",
     "",
-    "The browser session is already open in headed mode and logged into LinkedIn — the workflow runner handled login before launching this stage. Do NOT run `playwright-cli open`. Just attach to the existing session via `-s=` and start with the goto in Step 1.",
+    "The browser session is already open in headed mode and logged into LinkedIn — the login stage handled login before launching this stage. Do NOT run `playwright-cli open`. Just attach to the existing session via `-s=` and start with the goto in Step 1.",
     "",
     "Step 1 — process this one profile.",
     `  a. Navigate with \`playwright-cli -s=${args.sessionName} goto ${args.profileUrl}\`.`,
@@ -193,7 +202,7 @@ function buildNoNoteExecutePrompt(args: {
     "4. Screenshots are primary evidence. Save at least one profile screenshot and one final modal screenshot.",
     "5. Avoid brittle selectors, CSS classes, LinkedIn internals, or custom scripts that inspect the DOM. Only use visible text, accessibility snapshot refs, screenshots, and normal browser actions.",
     "",
-    "The browser session is already open in headed mode and logged into LinkedIn — the workflow runner handled login before launching this stage. Do NOT run `playwright-cli open`. Just attach to the existing session via `-s=` and start with the goto in Step 1.",
+    "The browser session is already open in headed mode and logged into LinkedIn — the login stage handled login before launching this stage. Do NOT run `playwright-cli open`. Just attach to the existing session via `-s=` and start with the goto in Step 1.",
     "",
     "Step 1 — process this one profile.",
     `  a. Navigate with \`playwright-cli -s=${args.sessionName} goto ${args.profileUrl}\`.`,
@@ -236,6 +245,188 @@ function buildSummarizePrompt(args: {
   ].join("\n");
 }
 
+function buildLoginPrompt(args: {
+  loginScriptPath: string;
+  loginStatusPath: string;
+  profileDir: string;
+  sessionName: string;
+}): string {
+  return [
+    "Open the headed LinkedIn browser session and wait for manual authentication.",
+    "Run the login helper exactly once. Do not merely describe it.",
+    "Do not enter credentials or automate MFA/checkpoint pages; the user handles login in the headed Chrome window.",
+    "The helper prints playwright-cli stdout/stderr and writes a JSON status file so startup failures are visible in this stage transcript.",
+    "",
+    `Command: bun ${args.loginScriptPath}`,
+    `Status file: ${args.loginStatusPath}`,
+    `Chrome profile dir: ${args.profileDir}`,
+    `Playwright session name: ${args.sessionName}`,
+    "",
+    "After the command exits:",
+    "- If it succeeded, report the authenticated URL from the status file.",
+    "- If it failed, report the command output and status-file error clearly.",
+    "- Do not run profile processing here; later stages handle profile URLs.",
+  ].join("\n");
+}
+
+function buildLoginScript(args: {
+  loginStatusPath: string;
+  profileDir: string;
+  sessionName: string;
+}): string {
+  return `process.env.TMPDIR = "/tmp";
+
+const sessionName = ${JSON.stringify(args.sessionName)};
+const profileDir = ${JSON.stringify(args.profileDir)};
+const statusPath = ${JSON.stringify(args.loginStatusPath)};
+const loginUrl = "https://www.linkedin.com/login";
+const feedUrl = "https://www.linkedin.com/feed/";
+const unauthPatterns = [
+  /linkedin\\.com\\/login/i,
+  /linkedin\\.com\\/uas\\/login/i,
+  /linkedin\\.com\\/checkpoint\\//i,
+  /linkedin\\.com\\/authwall/i,
+  /linkedin\\.com\\/signup/i,
+];
+const authPathPatterns = [
+  /linkedin\\.com\\/feed/i,
+  /linkedin\\.com\\/in\\//i,
+  /linkedin\\.com\\/mynetwork/i,
+];
+
+function isAuthenticatedUrl(url) {
+  if (unauthPatterns.some((rx) => rx.test(url))) return false;
+  return authPathPatterns.some((rx) => rx.test(url));
+}
+
+function parseEvalUrl(stdout) {
+  const match = stdout.match(/### Result\\s*\\n\\s*"([^"\\n]+)"/);
+  return match ? match[1] : null;
+}
+
+function printableArg(arg) {
+  return /\\s/.test(arg) ? JSON.stringify(arg) : arg;
+}
+
+async function writeStatus(status) {
+  await Bun.write(statusPath, JSON.stringify({ ...status, ts: new Date().toISOString() }, null, 2));
+}
+
+async function runCommand(argv) {
+  try {
+    const proc = Bun.spawn(argv, { stdout: "pipe", stderr: "pipe", env: process.env });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { argv, stdout, stderr, exitCode };
+  } catch (error) {
+    return { argv, stdout: "", stderr: error instanceof Error ? error.message : String(error), exitCode: 127 };
+  }
+}
+
+async function runPlaywright(args) {
+  const primary = await runCommand(["playwright-cli", ...args]);
+  if (primary.exitCode !== 127) return primary;
+  console.error("playwright-cli was not available; retrying with bunx playwright-cli");
+  return runCommand(["bunx", "playwright-cli", ...args]);
+}
+
+function printResult(label, result) {
+  console.log("### " + label);
+  console.log("$ " + result.argv.map(printableArg).join(" "));
+  console.log("exitCode=" + result.exitCode);
+  if (result.stdout.trim().length > 0) console.log("stdout:\\n" + result.stdout);
+  if (result.stderr.trim().length > 0) console.error("stderr:\\n" + result.stderr);
+}
+
+const timeoutMs = Number(process.env.LINKEDIN_LOGIN_TIMEOUT_MS ?? 10 * 60 * 1000);
+const pollIntervalMs = Number(process.env.LINKEDIN_LOGIN_POLL_MS ?? 3000);
+const deadline = Date.now() + timeoutMs;
+let lastUrl = null;
+let lastProbe = null;
+
+const opened = await runPlaywright([
+  "-s=" + sessionName,
+  "open",
+  "--headed",
+  "--persistent",
+  "--profile=" + profileDir,
+  loginUrl,
+]);
+printResult("open LinkedIn login", opened);
+if (opened.exitCode !== 0) {
+  await writeStatus({ status: "failed", error: "playwright-cli open failed", exitCode: opened.exitCode, stdout: opened.stdout, stderr: opened.stderr });
+  process.exit(opened.exitCode || 1);
+}
+
+console.log("Waiting up to " + Math.round(timeoutMs / 1000) + "s for manual LinkedIn login...");
+while (Date.now() < deadline) {
+  lastProbe = await runPlaywright(["-s=" + sessionName, "eval", "() => location.href"]);
+  if (lastProbe.exitCode === 0) {
+    lastUrl = parseEvalUrl(lastProbe.stdout);
+    console.log("currentUrl=" + (lastUrl ?? "<unknown>"));
+    if (lastUrl && isAuthenticatedUrl(lastUrl)) {
+      const normalized = await runPlaywright(["-s=" + sessionName, "goto", feedUrl]);
+      printResult("normalize to feed", normalized);
+      if (normalized.exitCode !== 0) {
+        await writeStatus({ status: "failed", error: "authenticated but feed navigation failed", url: lastUrl, exitCode: normalized.exitCode, stdout: normalized.stdout, stderr: normalized.stderr });
+        process.exit(normalized.exitCode || 1);
+      }
+      await writeStatus({ status: "ok", url: lastUrl });
+      console.log("LinkedIn login verified: " + lastUrl);
+      process.exit(0);
+    }
+  } else {
+    printResult("probe current URL", lastProbe);
+  }
+  await Bun.sleep(pollIntervalMs);
+}
+
+await writeStatus({
+  status: "failed",
+  error: "Timed out waiting for LinkedIn login",
+  url: lastUrl,
+  timeoutMs,
+  lastProbe: lastProbe
+    ? { exitCode: lastProbe.exitCode, stdout: lastProbe.stdout, stderr: lastProbe.stderr }
+    : null,
+});
+console.error("Timed out after " + Math.round(timeoutMs / 1000) + "s waiting for LinkedIn login. Last observed URL: " + (lastUrl ?? "<unknown>"));
+process.exit(1);
+`;
+}
+
+function writeLoginScript(args: {
+  loginScriptPath: string;
+  loginStatusPath: string;
+  profileDir: string;
+  sessionName: string;
+}): void {
+  writeFileSync(args.loginScriptPath, buildLoginScript(args), { mode: 0o700 });
+}
+
+function assertLoginStatus(loginStatusPath: string): void {
+  let raw: string;
+  try {
+    raw = readFileSync(loginStatusPath, "utf8");
+  } catch {
+    throw new Error(`LinkedIn login stage did not write status file: ${loginStatusPath}`);
+  }
+
+  let status: LoginStatus;
+  try {
+    status = JSON.parse(raw) as LoginStatus;
+  } catch {
+    throw new Error(`LinkedIn login stage wrote invalid JSON status file: ${loginStatusPath}`);
+  }
+
+  if (status.status !== "ok") {
+    throw new Error(status.error ?? `LinkedIn login stage failed; inspect ${loginStatusPath}`);
+  }
+}
+
 function setupRun(inputs: LinkedinConnectInputs): RunSetup {
   const profiles = inputs.profiles ?? "";
   const template = inputs.template ?? "";
@@ -246,6 +437,9 @@ function setupRun(inputs: LinkedinConnectInputs): RunSetup {
   writeFileSync(templatePath, template);
   const profileDir = mkdtempSync(join(tmpdir(), "linkedin-connect-profile-"));
   const sessionName = `linkedin-connect-${basename(profileDir).slice(-12)}`;
+  const loginScriptPath = join(scratch, "login.mjs");
+  const loginStatusPath = join(scratch, "login-status.json");
+  writeLoginScript({ loginScriptPath, loginStatusPath, profileDir, sessionName });
   const profileLines = profiles
     .split("\n")
     .map((line) => line.trim())
@@ -255,6 +449,8 @@ function setupRun(inputs: LinkedinConnectInputs): RunSetup {
     artifactsDir,
     profileDir,
     sessionName,
+    loginScriptPath,
+    loginStatusPath,
     profileLines,
     template,
     noNote: template.trim() === "",
@@ -284,88 +480,23 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Paths that mean "not yet authenticated". LinkedIn can park the user on the
-// raw login form, the OAuth-style /uas/login redirect, MFA/checkpoint pages,
-// or the public-marketing authwall during the interactive login.
-const LINKEDIN_UNAUTH_PATTERNS = [
-  /linkedin\.com\/login/i,
-  /linkedin\.com\/uas\/login/i,
-  /linkedin\.com\/checkpoint\//i,
-  /linkedin\.com\/authwall/i,
-  /linkedin\.com\/signup/i,
-];
-
-const LINKEDIN_AUTH_PATH_PATTERNS = [
-  /linkedin\.com\/feed/i,
-  /linkedin\.com\/in\//i,
-  /linkedin\.com\/mynetwork/i,
-];
-
-function parseEvalUrl(stdout: string): string | null {
-  // `playwright-cli eval "() => location.href"` emits:
-  //   ### Result
-  //   "https://www.linkedin.com/feed/"
-  //   ### ...
-  // Capture the quoted JSON string under "### Result".
-  const match = stdout.match(/### Result\s*\n\s*"([^"\n]+)"/);
-  return match ? match[1]! : null;
-}
-
-async function probeCurrentUrl(sessionName: string): Promise<string | null> {
-  const out = await Bun.$`playwright-cli -s=${sessionName} eval ${"() => location.href"}`
-    .nothrow()
-    .quiet();
-  if (out.exitCode !== 0) return null;
-  return parseEvalUrl(out.stdout.toString());
-}
-
-function isAuthenticatedUrl(url: string): boolean {
-  if (LINKEDIN_UNAUTH_PATTERNS.some((rx) => rx.test(url))) return false;
-  return LINKEDIN_AUTH_PATH_PATTERNS.some((rx) => rx.test(url));
-}
-
-async function openLoginSession(args: CleanupArgs): Promise<void> {
-  // Quiet both `open` and the polling probes so the orchestrator's OpenTUI
-  // renderer (which owns this pane's stdin/stdout) isn't corrupted by
-  // playwright-cli's stdout markdown trace ("### Browser … opened with pid …",
-  // "### Ran Playwright code", etc.).
-  await Bun.$`playwright-cli -s=${args.sessionName} open --headed --persistent --profile=${args.profileDir} https://www.linkedin.com/login`
-    .nothrow()
-    .quiet();
-
-  // Read-only URL polling. `eval "() => location.href"` doesn't navigate, so
-  // it won't interrupt the user's in-progress login / MFA / checkpoint flow.
-  // The headed Chrome window IS the prompt — no stdin readline needed.
-  const timeoutMs = Number(process.env.LINKEDIN_LOGIN_TIMEOUT_MS ?? 10 * 60 * 1000);
-  const pollIntervalMs = Number(process.env.LINKEDIN_LOGIN_POLL_MS ?? 3000);
-  const deadline = Date.now() + timeoutMs;
-  let lastUrl: string | null = null;
-
-  while (Date.now() < deadline) {
-    lastUrl = await probeCurrentUrl(args.sessionName);
-    if (lastUrl && isAuthenticatedUrl(lastUrl)) {
-      // Normalize to /feed so execute stages start from a known location.
-      await Bun.$`playwright-cli -s=${args.sessionName} goto https://www.linkedin.com/feed/`
-        .nothrow()
-        .quiet();
-      return;
-    }
-    await sleep(pollIntervalMs);
-  }
-
-  throw new Error(
-    `Timed out after ${Math.round(timeoutMs / 1000)}s waiting for LinkedIn login. ` +
-      `Last observed URL: ${lastUrl ?? "<unknown>"}. ` +
-      "Set LINKEDIN_LOGIN_TIMEOUT_MS to extend the wait.",
-  );
+async function runQuiet(command: string, args: readonly string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: "ignore" });
+    child.on("error", () => resolve(false));
+    child.on("exit", (code) => resolve(code === 0));
+  });
 }
 
 async function teardownRun(args: CleanupArgs): Promise<void> {
-  await Bun.$`playwright-cli -s=${args.sessionName} close`.nothrow().quiet();
+  const closed = await runQuiet("playwright-cli", [`-s=${args.sessionName}`, "close"]);
+  if (!closed) await runQuiet("bunx", ["playwright-cli", `-s=${args.sessionName}`, "close"]);
   // Belt-and-suspenders: if `close` couldn't reach the daemon, kill any
   // lingering daemon process for this session by name. cliDaemon.js lists the
-  // session name as its first argv, so a name-anchored pkill is safe.
-  await Bun.$`pkill -f ${`cliDaemon.js ${args.sessionName}`}`.nothrow().quiet();
+  // session name as its first argv, so a name-anchored pkill is safe. Also kill
+  // any orphaned browser process tied to this run's unique temp profile dir.
+  await runQuiet("pkill", ["-f", `cliDaemon.js ${args.sessionName}`]);
+  await runQuiet("pkill", ["-f", args.profileDir]);
   await rm(args.profileDir, { recursive: true, force: true });
 }
 
@@ -422,6 +553,8 @@ export default defineWorkflow("linkedin-connect")
       artifactsDir,
       profileDir,
       sessionName,
+      loginScriptPath,
+      loginStatusPath,
       profileLines,
       template,
       noNote,
@@ -433,7 +566,10 @@ export default defineWorkflow("linkedin-connect")
     installCleanup(() => cleanupArgs);
 
     try {
-      await openLoginSession({ sessionName, profileDir });
+      await ctx
+        .stage("login", { tools: BROWSER_STAGE_TOOLS })
+        .prompt(buildLoginPrompt({ loginScriptPath, loginStatusPath, profileDir, sessionName }));
+      assertLoginStatus(loginStatusPath);
 
       await ctx
         .stage("prepare", { tools: BROWSER_STAGE_TOOLS })
