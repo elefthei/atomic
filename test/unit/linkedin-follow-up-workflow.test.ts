@@ -206,7 +206,7 @@ describe("linkedin-follow-up approval gate helpers", () => {
     if (parsed.ok) assert.match(parsed.messages[0]?.message ?? "", /```ts/);
   });
 
-  test("generation prompt collects drafts without writing LinkedIn composer drafts", () => {
+  test("generation prompt requires sender profile inspection before drafting", () => {
     const prompt = buildProcessUnreadPrompt({
       conversationIndex: 1,
       maxMessages: 3,
@@ -220,6 +220,11 @@ describe("linkedin-follow-up approval gate helpers", () => {
     assert.match(prompt, /generate/i);
     assert.match(prompt, /do not fill/i);
     assert.match(prompt, /conversationUrl/);
+    assert.match(prompt, /must inspect the sender's LinkedIn profile/i);
+    assert.match(prompt, /last 3 messages from the sender/i);
+    assert.match(prompt, /Do not generate a successful draft without profile context/i);
+    assert.doesNotMatch(prompt, /inspect the sender profile when applicable/i);
+    assert.doesNotMatch(prompt, /continue from message context only/i);
     assert.doesNotMatch(prompt, /final browser state for a successful conversation is: response text visible in the reply composer/i);
   });
 
