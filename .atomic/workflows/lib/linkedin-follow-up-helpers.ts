@@ -142,6 +142,7 @@ export function buildProcessUnreadPrompt(args: {
     "- Use the same profile-inspection depth as the linkedin-connect workflow: visible Experience, About, Featured, and Activity content when visible.",
     "- If a slot has no clean answer, rewrite the surrounding phrase so the draft still reads naturally and stays grounded in visible facts.",
     "- Never invent biographical facts, relationship history, or commitments. If a claim is not visible in the message/profile, do not include it.",
+    "- Do not use em dashes in the draft. They are a common giveaway of AI-generated writing; use commas, periods, parentheses, or short sentences instead.",
     "- Keep the reply concise, warm, and natural for LinkedIn DMs. No unresolved placeholders or literal brackets may remain.",
     "- Record key substitutions/personalization choices in the JSONL result.",
     "</message_quality>",
