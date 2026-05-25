@@ -32,6 +32,11 @@ export interface ApprovedFollowUpWithMessagePath extends ApprovedFollowUp {
   readonly messagePath: string;
 }
 
+export interface ProcessedLinkedInTargets {
+  readonly profileUrls: readonly string[];
+  readonly conversationUrls: readonly string[];
+}
+
 export type ApprovalParseResult =
   | { readonly ok: true; readonly messages: readonly ApprovedFollowUp[] }
   | { readonly ok: false; readonly error: string };
@@ -39,6 +44,7 @@ export type ApprovalParseResult =
 const LEFTOVER_BRACKET_PATTERN = /[\[\]]/;
 const APPROVAL_JSON_START = "--- BEGIN APPROVAL JSON ---";
 const APPROVAL_JSON_END = "--- END APPROVAL JSON ---";
+const LINKEDIN_UNREAD_MESSAGING_URL = "https://www.linkedin.com/messaging/?filter=unread";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -57,6 +63,29 @@ export function readNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+export function normalizeLinkedInTargetUrl(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === "") return "";
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return "";
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  if (hostname !== "linkedin.com" && hostname !== "www.linkedin.com") return "";
+
+  url.hostname = "www.linkedin.com";
+  url.search = "";
+  url.hash = "";
+  url.pathname = url.pathname.replace(/\/+$/, "");
+  if (url.pathname === "") url.pathname = "/";
+
+  return url.toString();
+}
+
 export function buildProcessUnreadPrompt(args: {
   conversationIndex: number;
   maxMessages: number;
@@ -65,8 +94,15 @@ export function buildProcessUnreadPrompt(args: {
   artifactsDir: string;
   profileDir: string;
   sessionName: string;
+  alreadyProcessedTargets?: ProcessedLinkedInTargets;
 }): string {
   const n = args.conversationIndex;
+  const processedProfileUrls = [...(args.alreadyProcessedTargets?.profileUrls ?? [])]
+    .map(normalizeLinkedInTargetUrl)
+    .filter((url) => url !== "");
+  const processedConversationUrls = [...(args.alreadyProcessedTargets?.conversationUrls ?? [])]
+    .map(normalizeLinkedInTargetUrl)
+    .filter((url) => url !== "");
   return [
     `Generate at most ONE unread LinkedIn conversation follow-up (#${n} of safety cap ${args.maxMessages}) with playwright-cli and visual browser inspection.`,
     "Do not run the old Stagehand runner. Do not write a DOM-scraping script. Do not parse LinkedIn HTML.",
@@ -78,6 +114,14 @@ export function buildProcessUnreadPrompt(args: {
     `Playwright session name: ${args.sessionName}`,
     `Artifact directory: ${args.artifactsDir}`,
     `Generated results JSONL: ${args.resultsPath}`,
+    "",
+    "<already_processed_targets>",
+    "These normalized LinkedIn targets were already processed earlier in this workflow run. If an unread candidate resolves to any one of these profile URLs or conversation URLs, it is a duplicate target and must not receive a generated draft.",
+    "Profile URLs:",
+    processedProfileUrls.length === 0 ? "- (none)" : processedProfileUrls.map((url) => `- ${url}`).join("\n"),
+    "Conversation URLs:",
+    processedConversationUrls.length === 0 ? "- (none)" : processedConversationUrls.map((url) => `- ${url}`).join("\n"),
+    "</already_processed_targets>",
     "",
     "<non_negotiable_safety>",
     "- NEVER click any Send / Send message button or paper-airplane send icon during this generation stage.",
@@ -111,18 +155,23 @@ export function buildProcessUnreadPrompt(args: {
     "",
     "The browser session is already open in headed mode and logged into LinkedIn — the workflow runner handled login before launching this stage. Do NOT run `playwright-cli open`. Just attach to the existing session via `-s=`.",
     "",
-    "Step 1 — find the first unread conversation in the main Messaging inbox.",
-    `  a. Navigate with \`playwright-cli -s=${args.sessionName} goto https://www.linkedin.com/messaging/\` and snapshot the page.`,
-    `  b. Save an inbox screenshot to ${args.artifactsDir}/message-${n}-inbox.png.`,
-    "  c. Inspect the main conversation list for unread indicators (bold/unread label/badge/dot/count visible in the UI). If no unread conversation is visible, scroll the conversation list as needed and re-snapshot. Do not process read conversations.",
-    "  d. If there are no unread conversations in the main inbox after checking the list, append a JSONL row with status `done`, reason `no_unread`, and stop. Do not open a conversation.",
+    "Step 1 — find the next non-duplicate unread conversation in the unread-filtered Messaging inbox.",
+    `  a. Navigate with \`playwright-cli -s=${args.sessionName} goto ${LINKEDIN_UNREAD_MESSAGING_URL}\` and snapshot the page. Do NOT load regular LinkedIn Messaging first; LinkedIn can auto-open and mark the first thread read before the unread filter is active.`,
+    "  b. If LinkedIn opens a conversation automatically from the unread-filtered route before you click anything, treat that active conversation as the first unread candidate from this filtered view. Capture its URL and continue with the duplicate checks below; do not conclude `no_unread` solely because the filtered list no longer shows it.",
+    `  c. Save an inbox screenshot to ${args.artifactsDir}/message-${n}-inbox.png.`,
+    "  d. Inspect the unread-filtered conversation list for unread indicators (bold/unread label/badge/dot/count visible in the UI). If no unread conversation is visible, scroll the conversation list as needed and re-snapshot. Do not process read conversations.",
+    "  e. Build a short candidate list of unread conversations visible in the inbox/list. Track which visible candidates you inspect during this stage so you do not reopen the same duplicate forever if LinkedIn keeps it active/unread.",
+    "  f. If there are no unread conversations in the unread-filtered inbox after checking the list and no conversation was auto-opened from the unread-filtered route, append a JSONL row with status `done`, reason `no_unread`, and stop. Do not open a conversation.",
+    "  g. If every unread candidate you can find on this page/list is either already processed or already inspected during this stage, append exactly one JSONL row with status `done`, reason `no_new_unread`, and stop.",
     "",
-    "Step 2 — open exactly one unread conversation and understand it.",
-    "  a. Open the first unread conversation by visible ref. Opening it may mark it read; that is expected and creates loop progress.",
-    "  b. Capture the current browser URL after opening the conversation. Store it as `conversationUrl`; this is the target for the later approved send step.",
-    `  c. Save the thread screenshot to ${args.artifactsDir}/message-${n}-thread.png.`,
-    "  d. Read the unread message(s) and the last 3 messages from the sender in the conversation history. Scroll upward in the visible thread if needed to find them. If fewer than 3 sender messages are available, read all visible sender messages. Use nearby context only as needed to understand those sender messages. If this is a group conversation or the sender is ambiguous, skip with reason `group_or_ambiguous_sender`.",
-    "  e. Inspect the reply composer without typing. If it already contains text, or the UI indicates an existing draft for this conversation, do NOT overwrite or append later; append a JSONL row with status `skip`, reason `existing_draft`, and stop.",
+    "Step 2 — open unread candidates until one is a new target.",
+    "  a. Open the next unread conversation candidate by visible ref. Opening it may mark it read; that is expected and creates loop progress.",
+    "  b. Capture the current browser URL after opening the conversation. Normalize it by lowercasing the hostname, treating linkedin.com and www.linkedin.com as the same host, stripping query/hash, and normalizing trailing slashes. Store the unmodified visible URL as `conversationUrl`; the normalized URL is only for duplicate comparison.",
+    "  c. Inspect enough visible sender identity/profile affordance to discover the sender `profileUrl` if available. Normalize it the same way for duplicate comparison; if the profile URL is not yet available, continue using `conversationUrl` for duplicate comparison.",
+    `  d. If the normalized \`conversationUrl\` OR normalized \`profileUrl\` appears in <already_processed_targets>, this is a duplicate target. Do NOT append a generated row. Do NOT draft. Return to the unread-filtered Messaging inbox/list (${LINKEDIN_UNREAD_MESSAGING_URL}), re-snapshot, mark this candidate as inspected for this stage, and try the next unread candidate. If there is no next non-duplicate unread candidate, append exactly one \`done\` row with reason \`no_new_unread\`.`,
+    `  e. Save the thread screenshot to ${args.artifactsDir}/message-${n}-thread.png only for the first non-duplicate unread candidate you will actually process.`,
+    "  f. Read the unread message(s) and the last 3 messages from the sender in the conversation history. Scroll upward in the visible thread if needed to find them. If fewer than 3 sender messages are available, read all visible sender messages. Use nearby context only as needed to understand those sender messages. If this is a group conversation or the sender is ambiguous, skip with reason `group_or_ambiguous_sender`.",
+    "  g. Inspect the reply composer without typing. If it already contains text, or the UI indicates an existing draft for this conversation, do NOT overwrite or append later; append a JSONL row with status `skip`, reason `existing_draft`, and stop.",
     "",
     "Step 3 — inspect the sender profile before drafting.",
     "  a. Open the sender's visible LinkedIn profile link/name/avatar from the conversation. If no profile path is available, or the profile cannot be opened and inspected confidently, append a JSONL row with status `skip`, reason `profile_unavailable`, and stop. Do not continue from message context alone.",
@@ -138,7 +187,7 @@ export function buildProcessUnreadPrompt(args: {
     "",
     "Step 5 — append exactly one JSONL result row.",
     "Use one of these statuses: generated | skip | fail | done.",
-    "Use common reasons: generated | no_unread | existing_draft | group_or_ambiguous_sender | unsafe_to_generate | profile_unavailable | no_reply_box | unfilled_placeholder | user_login_required | navigation_failed | modal_or_ui_failed.",
+    "Use common reasons: generated | no_unread | no_new_unread | duplicate_target | existing_draft | group_or_ambiguous_sender | unsafe_to_generate | profile_unavailable | no_reply_box | unfilled_placeholder | user_login_required | navigation_failed | modal_or_ui_failed.",
     "The JSON object must include these keys: index, status, reason, senderName, profileUrl, conversationUrl, headline, company, unreadMessageSummary, profileSignals, draft, personalizationNotes, screenshots.",
     "- `conversationUrl` must be the current messaging conversation URL captured after opening the unread conversation when available; otherwise use an empty string.",
     "- `draft` must be the exact generated reply text when status is `generated`; otherwise use an empty string.",
@@ -149,12 +198,34 @@ export function buildProcessUnreadPrompt(args: {
     `{"index":${n},"status":"generated","reason":"generated","senderName":"Jane Doe","profileUrl":"https://www.linkedin.com/in/example/","conversationUrl":"https://www.linkedin.com/messaging/thread/example/","headline":"...","company":"...","unreadMessageSummary":"...","profileSignals":["..."],"draft":"...","personalizationNotes":["..."],"screenshots":["${args.artifactsDir}/message-${n}-thread.png"]}`,
     "JSONL",
     "",
-    "Print the same JSON object to stdout after appending it. Do not loop, do not process any other unread conversation, do not wait/sleep — pacing is handled outside this session. Stop after the result row is both appended and printed.",
+    "Print the same JSON object to stdout after appending it. You may inspect multiple unread candidates only to skip duplicates and find the next new target; after appending the single result row, do not process any other unread conversation, do not wait/sleep — pacing is handled outside this session. Stop after the result row is both appended and printed.",
   ].join("\n");
 }
 
+export function dedupeGeneratedFollowUpsForApproval(generated: readonly GeneratedFollowUp[]): readonly GeneratedFollowUp[] {
+  const seenProfileUrls = new Set<string>();
+  const seenConversationUrls = new Set<string>();
+  const unique: GeneratedFollowUp[] = [];
+
+  for (const row of generated) {
+    const profileUrl = normalizeLinkedInTargetUrl(row.profileUrl);
+    const conversationUrl = normalizeLinkedInTargetUrl(row.conversationUrl);
+    const isDuplicate =
+      (profileUrl !== "" && seenProfileUrls.has(profileUrl)) ||
+      (conversationUrl !== "" && seenConversationUrls.has(conversationUrl));
+
+    if (isDuplicate) continue;
+
+    unique.push(row);
+    if (profileUrl !== "") seenProfileUrls.add(profileUrl);
+    if (conversationUrl !== "") seenConversationUrls.add(conversationUrl);
+  }
+
+  return unique;
+}
+
 export function buildReviewDocument(generated: readonly GeneratedFollowUp[]): string {
-  const editable = generated.map((row) => ({
+  const editable = dedupeGeneratedFollowUpsForApproval(generated).map((row) => ({
     index: row.index,
     approved: true,
     senderName: row.senderName,
