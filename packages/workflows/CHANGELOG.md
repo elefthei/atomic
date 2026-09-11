@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Stage pause now cancels owned active and admitted queued agents and commands before acknowledging completion, including shells admitted during already-in-flight setup. It waits for cleanup without permanently closing message admission; resume releases queued user and Intercom messages and permits fresh work, without reviving cancelled executions or affecting sibling stages.
+- Workflow stage routes are no longer republished to the broker when nothing about the route changed. Every store invalidation — including tool events, attachment changes, and notices that leave the route projection identical — previously re-announced every run, so a burst of unrelated activity could produce a thousand redundant broker round trips and surface as `Intercom event relay failed (atomic:workflow-pending-stage-route): List sessions timeout`. Genuine changes still publish immediately and are never debounced, and an announcement that is rejected or that no consumer acknowledges is retried on the next invalidation.
 
 ### Changed
 
